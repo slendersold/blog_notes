@@ -1,0 +1,10 @@
+[package]
+name = "blog-server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "blog-server"
+path = "src/main.rs"
+
+[dependencies]

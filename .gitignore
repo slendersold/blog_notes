@@ -1,0 +1,28 @@
+# Сборка Rust
+debug/
+target/
+**/*.rs.bk
+*.pdb
+
+# ТЗ / чек-лист: секреты и локальные данные
+.env
+.env.*
+!.env.example
+.blog_token
+
+# sqlx офлайн-данные (cargo sqlx prepare)
+.sqlx/
+
+# ТЗ (шаг 1): Cargo.lock в игноре — при необходимости уберите строку и коммитьте lock для воспроизводимых CI
+Cargo.lock
+
+# wasm-pack / фронт
+pkg/
+dist/
+
+# Прочее
+.idea/
+.vscode/
+*.swp
+.DS_Store
+node_modules/
