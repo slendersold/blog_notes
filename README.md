@@ -1,4 +1,4 @@
-# mod3-blog
+# blog_notes
 
 Проект **модуля 3**: блог на Rust (workspace: сервер, клиент-библиотека, CLI, WASM).
 
