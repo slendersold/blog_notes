@@ -2,8 +2,15 @@
 name = "blog-client"
 version.workspace = true
 edition.workspace = true
+build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
+tonic.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+
+[build-dependencies]
+tonic-build.workspace = true

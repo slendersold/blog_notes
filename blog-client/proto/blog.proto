@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package blog;
+
+service BlogService {
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (AuthResponse);
+  rpc CreatePost(CreatePostRequest) returns (PostResponse);
+  rpc GetPost(GetPostRequest) returns (PostResponse);
+  rpc UpdatePost(UpdatePostRequest) returns (PostResponse);
+  rpc DeletePost(DeletePostRequest) returns (DeletePostResponse);
+  rpc ListPosts(ListPostsRequest) returns (ListPostsResponse);
+}
+
+message User {
+  int64 id = 1;
+  string username = 2;
+  string email = 3;
+  string created_at = 4;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  string token = 1;
+  User user = 2;
+}
+
+message Post {
+  int64 id = 1;
+  string title = 2;
+  string content = 3;
+  int64 author_id = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+message CreatePostRequest {
+  string title = 1;
+  string content = 2;
+}
+
+message GetPostRequest {
+  int64 id = 1;
+}
+
+message UpdatePostRequest {
+  int64 id = 1;
+  string title = 2;
+  string content = 3;
+}
+
+message DeletePostRequest {
+  int64 id = 1;
+}
+
+message DeletePostResponse {
+  bool success = 1;
+}
+
+message PostResponse {
+  Post post = 1;
+}
+
+message ListPostsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+}
+
+message ListPostsResponse {
+  repeated Post posts = 1;
+  int32 total = 2;
+}
