@@ -16,7 +16,7 @@ use infrastructure::{
     jwt::JwtService,
     logging::init_tracing,
 };
-use presentation::{grpc_service::GrpcBlogService, http_handlers, grpc_service};
+use presentation::{grpc_service, grpc_service::GrpcBlogService, http_handlers};
 use tonic::transport::Server;
 use tracing::info;
 
@@ -55,9 +55,9 @@ async fn main() -> anyhow::Result<()> {
 
     let grpc_blog_service = GrpcBlogService::new(auth_service, blog_service);
     let grpc_server = Server::builder()
-        .add_service(grpc_service::blog::blog_service_server::BlogServiceServer::new(
-            grpc_blog_service,
-        ))
+        .add_service(
+            grpc_service::blog::blog_service_server::BlogServiceServer::new(grpc_blog_service),
+        )
         .serve(grpc_addr);
 
     info!("HTTP listening on {}", http_addr);
