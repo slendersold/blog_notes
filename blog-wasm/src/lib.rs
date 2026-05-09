@@ -179,10 +179,7 @@ impl BlogApp {
     pub async fn load_posts(&self) -> Result<JsValue, JsValue> {
         let limit = 20_i64;
         let offset = 0_i64;
-        let url = format!(
-            "{}/api/posts?limit={}&offset={}",
-            self.base, limit, offset
-        );
+        let url = format!("{}/api/posts?limit={}&offset={}", self.base, limit, offset);
         let resp = Request::get(&url)
             .send()
             .await
@@ -204,7 +201,10 @@ impl BlogApp {
 
     /// Создание поста (нужен Bearer).
     pub async fn create_post(&self, title: &str, content: &str) -> Result<JsValue, JsValue> {
-        let tok = self.token.as_deref().ok_or_else(|| js_err("not authenticated"))?;
+        let tok = self
+            .token
+            .as_deref()
+            .ok_or_else(|| js_err("not authenticated"))?;
         let url = format!("{}/api/posts", self.base);
         let body = serde_json::json!({ "title": title, "content": content });
         let resp = Request::post(&url)
@@ -225,7 +225,10 @@ impl BlogApp {
         title: &str,
         content: &str,
     ) -> Result<JsValue, JsValue> {
-        let tok = self.token.as_deref().ok_or_else(|| js_err("not authenticated"))?;
+        let tok = self
+            .token
+            .as_deref()
+            .ok_or_else(|| js_err("not authenticated"))?;
         let url = format!("{}/api/posts/{id}", self.base);
         let body = serde_json::json!({ "title": title, "content": content });
         let resp = Request::put(&url)
@@ -241,7 +244,10 @@ impl BlogApp {
 
     /// Удаление поста (Bearer).
     pub async fn delete_post(&self, id: i64) -> Result<JsValue, JsValue> {
-        let tok = self.token.as_deref().ok_or_else(|| js_err("not authenticated"))?;
+        let tok = self
+            .token
+            .as_deref()
+            .ok_or_else(|| js_err("not authenticated"))?;
         let url = format!("{}/api/posts/{id}", self.base);
         let resp = Request::delete(&url)
             .header("Authorization", &format!("Bearer {tok}"))
