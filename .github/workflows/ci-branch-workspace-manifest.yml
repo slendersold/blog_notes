@@ -36,7 +36,7 @@ jobs:
       - name: Check (workspace)
         run: cargo check --workspace
 
-      - name: Tests (unit / lib / bins; без интеграции tests/ и без ignored)
+      - name: "Tests (unit, lib, bins; без интеграции tests и без ignored)"
         run: |
           cargo test --workspace --lib
           cargo test -p blog-server --bin blog-server

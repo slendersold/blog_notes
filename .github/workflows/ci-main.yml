@@ -1,6 +1,5 @@
 # Ветка main/master: полный прогон всего workspace — все крейты, все таргеты тестов,
 # интеграционные тесты членов воркспейса и отдельный шаг с Postgres для #[ignored] тестов.
-# Добавите отдельный член workspace для «мега»-интеграции — он попадёт в `cargo test --workspace`.
 name: CI (main · full workspace)
 
 on:
@@ -51,10 +50,10 @@ jobs:
         run: cargo build --workspace
 
       # Все unit-, integration- и doc-тесты всех членов workspace (кроме #[ignored]).
-      - name: Tests (workspace — все крейты и tests/ у членов)
+      - name: "Tests (workspace); lib bins integration doc; без ignored"
         run: cargo test --workspace
 
-      - name: Integration tests с БД (#[ignored], нужен DATABASE_URL)
+      - name: "Integration tests with Postgres (ignored test; needs DATABASE_URL)"
         run: cargo test -p blog-server --test migrations_integration -- --ignored --nocapture
 
       - name: Build WASM

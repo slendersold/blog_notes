@@ -35,6 +35,6 @@ jobs:
       - name: Build
         run: cargo build -p blog-server
 
-      - name: Tests (unit: lib не у бинарного крейта — только bin)
+      - name: "Tests (unit / bin-only crate)"
         run: |
           cargo test -p blog-server --bin blog-server
