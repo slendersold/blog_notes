@@ -21,7 +21,8 @@ tonic-build = "0.12"
 actix-cors = "0.7"
 actix-web = "4"
 actix-web-httpauth = "0.8"
-argon2 = "0.5"
+argon2 = { version = "0.5", features = ["std"] }
+password-hash = { version = "0.5", features = ["rand_core"] }
 dotenvy = "0.15"
 jsonwebtoken = "9"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono"] }

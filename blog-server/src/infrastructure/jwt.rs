@@ -1,14 +1,19 @@
+//! Выпуск и проверка JWT на основе HMAC секрета; claims несёт `user_id` и имя пользователя до истечения срока.
+
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
+/// То, что кладётся в полезную нагрузку токена и при успешном decode попадает в хендлеры.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub user_id: i64,
     pub username: String,
+    /// Время истечения в секундах с UNIX-эпохи (`exp` для библиотеки `jsonwebtoken`).
     pub exp: usize,
 }
 
+/// Оборачивает закодированные ключи подписи/проверки; клонируется в Arc между слоями.
 #[derive(Clone)]
 pub struct JwtService {
     encoding_key: EncodingKey,
@@ -16,13 +21,20 @@ pub struct JwtService {
 }
 
 impl JwtService {
-    pub fn new(secret: &str) -> Self {
-        Self {
+    /// Собирает сервис; при сликом коротком секрете возвращает ошибку, чтобы конфигурация была явной.
+    pub fn try_new(secret: &str) -> anyhow::Result<Self> {
+        if secret.len() < 32 {
+            anyhow::bail!(
+                "JWT_SECRET must be at least 32 ASCII characters long (minimum required by coursework)"
+            );
+        }
+        Ok(Self {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
             decoding_key: DecodingKey::from_secret(secret.as_bytes()),
-        }
+        })
     }
 
+    /// Формирует строковый Bearer-токен со сроком жизни 24 часа.
     pub fn generate_token(&self, user_id: i64, username: &str) -> anyhow::Result<String> {
         let exp = (Utc::now() + Duration::hours(24)).timestamp() as usize;
         let claims = Claims {
@@ -30,11 +42,13 @@ impl JwtService {
             username: username.to_string(),
             exp,
         };
-        Ok(encode(&Header::default(), &claims, &self.encoding_key)?)
+        encode(&Header::default(), &claims, &self.encoding_key).map_err(anyhow::Error::from)
     }
 
+    /// Проверяет подпись и срок действия и возвращает извлечённые claims или ошибку decode.
     pub fn verify_token(&self, token: &str) -> anyhow::Result<Claims> {
-        let data = decode::<Claims>(token, &self.decoding_key, &Validation::default())?;
-        Ok(data.claims)
+        decode::<Claims>(token, &self.decoding_key, &Validation::default())
+            .map(|d| d.claims)
+            .map_err(anyhow::Error::from)
     }
 }
