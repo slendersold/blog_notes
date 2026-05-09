@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blog — WASM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        line-height: 1.45;
+      }
+      body {
+        max-width: 52rem;
+        margin: 1.5rem auto;
+        padding: 0 1rem;
+      }
+      fieldset {
+        margin-bottom: 1rem;
+      }
+      label {
+        display: block;
+        margin: 0.35rem 0;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="email"],
+      textarea {
+        width: 100%;
+        max-width: 28rem;
+        box-sizing: border-box;
+      }
+      textarea {
+        min-height: 6rem;
+      }
+      #posts article {
+        border: 1px solid #ccc;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.75rem;
+        border-radius: 6px;
+      }
+      #posts h3 {
+        margin: 0 0 0.35rem;
+      }
+      #auth-banner {
+        padding: 0.5rem 0.75rem;
+        background: #f4f4f4;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+      }
+      #msg {
+        color: #b00020;
+        min-height: 1.25rem;
+      }
+      .muted {
+        color: #555;
+        font-size: 0.9rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Блог (WebAssembly)</h1>
+    <p class="muted">
+      Сборка: из корня проекта <code>./scripts/build-wasm-web.sh</code> или
+      <code>cd blog-wasm && wasm-pack build --target web</code>. Затем из этого каталога:
+      <code>python3 -m http.server 8000</code> и откройте эту страницу.
+    </p>
+
+    <div class="row">
+      <label>
+        Базовый URL API
+        <input id="api-base" type="text" value="http://127.0.0.1:8080" />
+      </label>
+      <button type="button" id="btn-reconnect">Применить URL</button>
+    </div>
+
+    <div id="auth-banner">
+      <strong>Статус:</strong> <span id="auth-status">…</span>
+      <button type="button" id="btn-logout" hidden>Выйти</button>
+    </div>
+
+    <fieldset id="fieldset-register">
+      <legend>Регистрация</legend>
+      <form id="form-register">
+        <label>Имя <input name="username" type="text" autocomplete="username" /></label>
+        <label>Email <input name="email" type="email" autocomplete="email" /></label>
+        <label>Пароль <input name="password" type="password" autocomplete="new-password" /></label>
+        <button type="submit">Зарегистрироваться</button>
+      </form>
+    </fieldset>
+
+    <fieldset id="fieldset-login">
+      <legend>Вход</legend>
+      <form id="form-login">
+        <label>Имя <input name="username" type="text" autocomplete="username" /></label>
+        <label>Пароль <input name="password" type="password" autocomplete="current-password" /></label>
+        <button type="submit">Войти</button>
+      </form>
+    </fieldset>
+
+    <fieldset id="fieldset-post" hidden>
+      <legend id="post-legend">Новый пост</legend>
+      <form id="form-post">
+        <input type="hidden" name="edit-id" id="edit-id" value="" />
+        <label>Заголовок <input name="title" type="text" /></label>
+        <label>Содержание <textarea name="content"></textarea></label>
+        <div class="row">
+          <button type="submit" id="btn-post-submit">Опубликовать</button>
+          <button type="button" id="btn-cancel-edit" hidden>Отменить редактирование</button>
+        </div>
+      </form>
+    </fieldset>
+
+    <p id="msg"></p>
+
+    <h2>Посты</h2>
+    <div id="posts"></div>
+
+    <script type="module">
+      import init, { BlogApp } from "./blog-wasm/pkg/blog_wasm.js";
+
+      const $ = (id) => document.getElementById(id);
+
+      /** Привести id из JSON/WASM (number/bigint) к number для сравнения в JS. */
+      function idNum(x) {
+        if (x == null) return null;
+        return typeof x === "bigint" ? Number(x) : Number(x);
+      }
+
+      let app;
+      /** @type {number | null} */
+      let editingPostId = null;
+
+      function setMsg(text) {
+        $("msg").textContent = text || "";
+      }
+
+      function apiBase() {
+        const v = $("api-base").value.trim();
+        return v || "http://127.0.0.1:8080";
+      }
+
+      function recreateApp() {
+        app = new BlogApp(apiBase());
+        refreshAuthUi();
+      }
+
+      function refreshAuthUi() {
+        const authed = app.isAuthenticated();
+        const sess = app.session();
+        $("auth-status").textContent = authed && sess
+          ? `вошли как «${sess.username}»`
+          : "гость";
+        $("btn-logout").hidden = !authed;
+        $("fieldset-register").hidden = authed;
+        $("fieldset-login").hidden = authed;
+        $("fieldset-post").hidden = !authed;
+        if (!authed) {
+          editingPostId = null;
+          $("form-post").reset();
+          $("edit-id").value = "";
+          $("btn-cancel-edit").hidden = true;
+          $("post-legend").textContent = "Новый пост";
+          $("btn-post-submit").textContent = "Опубликовать";
+        }
+      }
+
+      function validateNonEmpty(parts) {
+        for (const [name, val] of parts) {
+          if (!String(val || "").trim()) {
+            setMsg(`Заполните поле: ${name}`);
+            return false;
+          }
+        }
+        setMsg("");
+        return true;
+      }
+
+      async function refreshPosts() {
+        const root = $("posts");
+        root.innerHTML = "";
+        try {
+          const data = await app.load_posts();
+          const session = app.session();
+          const uid =
+            session && session.user_id != null ? idNum(session.user_id) : null;
+          const posts = data.posts || [];
+          if (!posts.length) {
+            root.innerHTML = "<p class=\"muted\">Пока нет постов.</p>";
+            return;
+          }
+          for (const p of posts) {
+            const art = document.createElement("article");
+            const aid = idNum(p.author_id);
+            const own = uid !== null && aid === uid;
+            art.innerHTML = `
+              <h3>${escapeHtml(p.title)}</h3>
+              <p>${escapeHtml(p.content)}</p>
+              <p class="muted">id ${p.id} · автор ${p.author_id} · ${escapeHtml(p.updated_at)}</p>
+              ${own ? `<div class="row"><button type="button" data-edit="${p.id}">Изменить</button><button type="button" data-del="${p.id}">Удалить</button></div>` : ""}
+            `;
+            root.appendChild(art);
+          }
+          root.querySelectorAll("[data-edit]").forEach((btn) => {
+            btn.addEventListener("click", () => startEdit(Number(btn.getAttribute("data-edit"))));
+          });
+          root.querySelectorAll("[data-del]").forEach((btn) => {
+            btn.addEventListener("click", () => removePost(Number(btn.getAttribute("data-del"))));
+          });
+        } catch (e) {
+          setMsg(String(e));
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      async function startEdit(id) {
+        try {
+          const p = await app.get_post(BigInt(id));
+          editingPostId = id;
+          const pf = /** @type {HTMLFormElement} */ ($("form-post"));
+          pf.elements.namedItem("title").value = p.title;
+          pf.elements.namedItem("content").value = p.content;
+          $("edit-id").value = String(id);
+          $("post-legend").textContent = `Редактирование поста #${id}`;
+          $("btn-post-submit").textContent = "Сохранить";
+          $("btn-cancel-edit").hidden = false;
+          setMsg("");
+        } catch (e) {
+          setMsg(String(e));
+        }
+      }
+
+      function cancelEdit() {
+        editingPostId = null;
+        $("form-post").reset();
+        $("edit-id").value = "";
+        $("post-legend").textContent = "Новый пост";
+        $("btn-post-submit").textContent = "Опубликовать";
+        $("btn-cancel-edit").hidden = true;
+        setMsg("");
+      }
+
+      async function removePost(id) {
+        if (!confirm(`Удалить пост #${id}?`)) return;
+        try {
+          await app.delete_post(BigInt(id));
+          cancelEdit();
+          await refreshPosts();
+          setMsg("");
+        } catch (e) {
+          setMsg(String(e));
+        }
+      }
+
+      await init();
+
+      $("btn-reconnect").addEventListener("click", () => {
+        recreateApp();
+        refreshPosts();
+      });
+
+      $("btn-logout").addEventListener("click", () => {
+        app.logout();
+        refreshAuthUi();
+        refreshPosts();
+        setMsg("");
+      });
+
+      $("form-register").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const username = f.username.value;
+        const email = f.email.value;
+        const password = f.password.value;
+        if (!validateNonEmpty([
+          ["имя", username],
+          ["email", email],
+          ["пароль", password],
+        ])) return;
+        try {
+          await app.register(username, email, password);
+          f.reset();
+          refreshAuthUi();
+          await refreshPosts();
+        } catch (e) {
+          setMsg(String(e));
+        }
+      });
+
+      $("form-login").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const username = f.username.value;
+        const password = f.password.value;
+        if (!validateNonEmpty([
+          ["имя", username],
+          ["пароль", password],
+        ])) return;
+        try {
+          await app.login(username, password);
+          f.reset();
+          refreshAuthUi();
+          await refreshPosts();
+        } catch (e) {
+          setMsg(String(e));
+        }
+      });
+
+      $("form-post").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const f = /** @type {HTMLFormElement} */ (ev.target);
+        const title = f.elements.namedItem("title").value;
+        const content = f.elements.namedItem("content").value;
+        if (!validateNonEmpty([
+          ["заголовок", title],
+          ["содержание", content],
+        ])) return;
+        try {
+          const idStr = $("edit-id").value.trim();
+          if (idStr) {
+            await app.update_post(BigInt(idStr), title, content);
+          } else {
+            await app.create_post(title, content);
+          }
+          f.reset();
+          cancelEdit();
+          refreshAuthUi();
+          await refreshPosts();
+        } catch (e) {
+          setMsg(String(e));
+        }
+      });
+
+      $("btn-cancel-edit").addEventListener("click", () => cancelEdit());
+
+      recreateApp();
+      await refreshPosts();
+    </script>
+  </body>
+</html>

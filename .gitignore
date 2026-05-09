@@ -1,6 +1,11 @@
 # Сборка Rust
 debug/
 target/
+# Локальный target-dir (см. .cargo/config.toml)
+tmp/
+
+# Временный каталог проверки wasm (ручной CARGO_TARGET_DIR)
+tests/target-step6-check/
 **/*.rs.bk
 *.pdb
 

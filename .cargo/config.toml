@@ -1,0 +1,3 @@
+# Локальная выгрузка артефактов Cargo (см. `tmp/` в .gitignore), без заполнения системного /tmp.
+[build]
+target-dir = "tmp/target"
