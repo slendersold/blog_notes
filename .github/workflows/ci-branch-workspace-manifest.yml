@@ -1,0 +1,43 @@
+# Не-main ветки: изменился только корневой манифест воркспейса — проверяем все члены разом (без Postgres).
+name: CI branch · workspace manifest
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+    paths:
+      - "Cargo.toml"
+      - ".github/workflows/ci-branch-workspace-manifest.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (workspace)
+        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
+
+      - name: Check (workspace)
+        run: cargo check --workspace
+
+      - name: Tests (unit / lib / bins; без интеграции tests/ и без ignored)
+        run: |
+          cargo test --workspace --lib
+          cargo test -p blog-server --bin blog-server
+          cargo test -p blog-cli --bin blog-cli

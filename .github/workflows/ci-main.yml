@@ -1,0 +1,61 @@
+# Ветка main/master: полный прогон всего workspace — все крейты, все таргеты тестов,
+# интеграционные тесты членов воркспейса и отдельный шаг с Postgres для #[ignored] тестов.
+# Добавите отдельный член workspace для «мега»-интеграции — он попадёт в `cargo test --workspace`.
+name: CI (main · full workspace)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  CARGO_TERM_COLOR: always
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/blog_integration_test
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blog_integration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d blog_integration_test"
+          --health-interval 4s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (workspace)
+        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
+
+      - name: Build (workspace)
+        run: cargo build --workspace
+
+      # Все unit-, integration- и doc-тесты всех членов workspace (кроме #[ignored]).
+      - name: Tests (workspace — все крейты и tests/ у членов)
+        run: cargo test --workspace
+
+      - name: Integration tests с БД (#[ignored], нужен DATABASE_URL)
+        run: cargo test -p blog-server --test migrations_integration -- --ignored --nocapture
+
+      - name: Build WASM
+        run: cargo build -p blog-wasm --target wasm32-unknown-unknown

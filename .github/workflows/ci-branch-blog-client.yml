@@ -1,0 +1,39 @@
+# Не-main ветки: только blog-client (изменения под этим путём).
+name: CI branch · blog-client
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+    paths:
+      - "blog-client/**"
+      - ".github/workflows/ci-branch-blog-client.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  blog-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format (workspace)
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy -p blog-client --all-targets --no-deps -- -D warnings
+
+      - name: Build
+        run: cargo build -p blog-client
+
+      - name: Tests (lib / unit only)
+        run: cargo test -p blog-client --lib
