@@ -1,3 +1,6 @@
+//! blog-server binary. Scaffolding layers are wired next; suppress dead-code until handlers use them.
+#![allow(dead_code)]
+
 mod application;
 mod data;
 mod domain;
