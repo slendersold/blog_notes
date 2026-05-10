@@ -79,7 +79,9 @@ fn docker_compose(
     for a in args {
         cmd.arg(a);
     }
-    cmd.stdin(Stdio::null()).status().expect("spawn docker compose")
+    cmd.stdin(Stdio::null())
+        .status()
+        .expect("spawn docker compose")
 }
 
 fn docker_compose_up_and_wait(workspace: &Path, compose_file: &Path, project: &str, pg_port: u16) {
@@ -107,7 +109,16 @@ fn docker_compose_up_and_wait(workspace: &Path, compose_file: &Path, project: &s
             workspace,
             Some(compose_file),
             project,
-            &["exec", "-T", PG_SERVICE, "pg_isready", "-U", "blog_user", "-d", "blog_db"],
+            &[
+                "exec",
+                "-T",
+                PG_SERVICE,
+                "pg_isready",
+                "-U",
+                "blog_user",
+                "-d",
+                "blog_db",
+            ],
             None,
         );
         if rc.success() {
@@ -134,11 +145,7 @@ fn cargo_bin_hyphen(name: &'static str) -> PathBuf {
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(raw) = std::env::var("CARGO_TARGET_DIR") {
         let p = PathBuf::from(raw);
-        roots.push(if p.is_absolute() {
-            p
-        } else {
-            ws.join(p)
-        });
+        roots.push(if p.is_absolute() { p } else { ws.join(p) });
     }
     roots.push(ws.join("tmp/target"));
     roots.push(ws.join("target"));
@@ -208,9 +215,8 @@ fn five_parallel_cli_clients_one_server_postgres_http() {
 
     docker_compose_up_and_wait(&ws, &compose_path, &project, pg_port);
 
-    let database_url = format!(
-        "postgres://blog_user:blog_pass@127.0.0.1:{pg_port}/blog_db?sslmode=disable"
-    );
+    let database_url =
+        format!("postgres://blog_user:blog_pass@127.0.0.1:{pg_port}/blog_db?sslmode=disable");
 
     let http_port = pick_port();
     let grpc_port = pick_port();
@@ -295,9 +301,7 @@ fn five_parallel_cli_clients_one_server_postgres_http() {
 
                 let v: Value = serde_json::from_slice(&cr.stdout).expect("create JSON");
                 let id = v["id"].as_i64().expect("post id in create response");
-                let author = v["author_username"]
-                    .as_str()
-                    .expect("author_username");
+                let author = v["author_username"].as_str().expect("author_username");
                 assert_eq!(author, username, "author_username JSON");
                 (idx, id, title, email)
             })
@@ -312,7 +316,9 @@ fn five_parallel_cli_clients_one_server_postgres_http() {
 
     let list_json = Command::new(&cli_path)
         .current_dir(workspace_root())
-        .args(["--server", &http_base, "list", "--limit", "50", "--offset", "0"])
+        .args([
+            "--server", &http_base, "list", "--limit", "50", "--offset", "0",
+        ])
         .output()
         .expect("public list");
 
@@ -330,10 +336,7 @@ fn five_parallel_cli_clients_one_server_postgres_http() {
         posts.len()
     );
 
-    let titles: Vec<&str> = posts
-        .iter()
-        .filter_map(|p| p["title"].as_str())
-        .collect();
+    let titles: Vec<&str> = posts.iter().filter_map(|p| p["title"].as_str()).collect();
     for (_, _, ref want_title, _) in &created {
         assert!(
             titles.iter().any(|t| *t == want_title),
@@ -401,13 +404,7 @@ fn five_parallel_cli_clients_one_server_postgres_http() {
 
     let del = Command::new(&cli_path)
         .current_dir(tail_dir.path())
-        .args([
-            "--server",
-            &http_base,
-            "delete",
-            "--id",
-            &id0.to_string(),
-        ])
+        .args(["--server", &http_base, "delete", "--id", &id0.to_string()])
         .output()
         .expect("delete");
     assert!(

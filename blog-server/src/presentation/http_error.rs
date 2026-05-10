@@ -23,9 +23,9 @@ pub fn domain_error_response(err: DomainError) -> HttpResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::error::DomainError;
     use actix_web::body::to_bytes;
     use actix_web::http::StatusCode;
-    use crate::domain::error::DomainError;
 
     #[tokio::test]
     async fn validation_maps_to_400() {

@@ -44,10 +44,7 @@ pub async fn health() -> HttpResponse {
 }
 
 /// Создание аккаунта; при успехе отдаёт `201` и токен Bearer для последующих вызовов.
-pub async fn register(
-    auth: Data<AuthService>,
-    body: web::Json<RegisterRequest>,
-) -> HttpResponse {
+pub async fn register(auth: Data<AuthService>, body: web::Json<RegisterRequest>) -> HttpResponse {
     match auth.register(body.into_inner()).await {
         Ok((token, user)) => {
             HttpResponse::build(StatusCode::CREATED).json(AuthResponseBody { token, user })
@@ -149,8 +146,7 @@ mod tests {
 
     #[test]
     fn posts_list_query_custom_limit() {
-        let q: PostsListQuery =
-            serde_urlencoded::from_str("limit=5&offset=10").expect("query");
+        let q: PostsListQuery = serde_urlencoded::from_str("limit=5&offset=10").expect("query");
         assert_eq!(q.limit, 5);
         assert_eq!(q.offset, 10);
     }

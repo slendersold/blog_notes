@@ -24,7 +24,10 @@ mod tests {
     #[test]
     fn decodes_well_formed_middle_segment() {
         let payload_json = br#"{"user_id":7,"username":"sam"}"#;
-        let b64 = URL_SAFE.encode(payload_json).trim_end_matches('=').to_string();
+        let b64 = URL_SAFE
+            .encode(payload_json)
+            .trim_end_matches('=')
+            .to_string();
         let token = format!("hdr.{b64}.sig");
         let (id, name) = claims_from_jwt_payload_unverified(&token).expect("parse");
         assert_eq!(id, 7);

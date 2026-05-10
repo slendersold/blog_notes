@@ -71,7 +71,9 @@ async fn main() -> anyhow::Result<()> {
             )
             .service(
                 web::scope("/api/posts")
-                    .wrap(actix_middleware::from_fn(http_middleware::jwt_posts_middleware))
+                    .wrap(actix_middleware::from_fn(
+                        http_middleware::jwt_posts_middleware,
+                    ))
                     .route("", web::get().to(http_handlers::list_posts))
                     .route("", web::post().to(http_handlers::create_post))
                     .route("/{id}", web::get().to(http_handlers::get_post))
@@ -88,9 +90,7 @@ async fn main() -> anyhow::Result<()> {
     let (grpc_shutdown_tx, grpc_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let grpc_task = tokio::spawn(
         Server::builder()
-            .add_service(grpc_service::blog::blog_service_server::BlogServiceServer::new(
-                grpc_blog,
-            ))
+            .add_service(grpc_service::blog::blog_service_server::BlogServiceServer::new(grpc_blog))
             .serve_with_shutdown(grpc_addr, async move {
                 let _ = grpc_shutdown_rx.await;
             }),
@@ -120,9 +120,13 @@ mod route_smoke {
 
     #[actix_web::test]
     async fn health_route_without_db() {
-        let app =
-            actix_web::test::init_service(App::new().route("/health", web::get().to(http_handlers::health))).await;
-        let req = actix_web::test::TestRequest::get().uri("/health").to_request();
+        let app = actix_web::test::init_service(
+            App::new().route("/health", web::get().to(http_handlers::health)),
+        )
+        .await;
+        let req = actix_web::test::TestRequest::get()
+            .uri("/health")
+            .to_request();
         let resp = actix_web::test::call_service(&app, req).await;
         assert!(resp.status().is_success());
     }

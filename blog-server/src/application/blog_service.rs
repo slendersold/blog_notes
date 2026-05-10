@@ -28,9 +28,7 @@ impl BlogService {
         req: CreatePostRequest,
     ) -> Result<PostPublic, DomainError> {
         validation::post_payload(&req.title, &req.content)?;
-        self.posts
-            .insert(&req.title, &req.content, author_id)
-            .await
+        self.posts.insert(&req.title, &req.content, author_id).await
     }
 
     /// Публичное чтение с `author_username`.

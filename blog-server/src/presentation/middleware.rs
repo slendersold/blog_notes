@@ -50,8 +50,8 @@ pub async fn jwt_posts_middleware(
         actix_web::error::ErrorInternalServerError("AuthService missing from app data")
     })?;
 
-    let token =
-        bearer_raw(&req).ok_or_else(|| ErrorUnauthorized("missing or malformed Authorization: Bearer header"))?;
+    let token = bearer_raw(&req)
+        .ok_or_else(|| ErrorUnauthorized("missing or malformed Authorization: Bearer header"))?;
 
     let claims = auth
         .verify_bearer(token)

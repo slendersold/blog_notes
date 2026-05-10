@@ -2,7 +2,10 @@
 
 use sqlx::PgPool;
 
-use crate::domain::{error::DomainError, post::{Post, PostPublic}};
+use crate::domain::{
+    error::DomainError,
+    post::{Post, PostPublic},
+};
 
 /// Репозиторий постов без бизнес-правил авторства — проверку владельца делает сервис.
 #[derive(Clone)]
