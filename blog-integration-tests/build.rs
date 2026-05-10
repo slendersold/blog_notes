@@ -50,7 +50,7 @@ fn main() {
     );
 
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".into());
-    let roots = target_roots(&workspace);
+    let roots = target_roots(workspace);
 
     for root in &roots {
         let cli = exe_path(root, &profile, "blog-cli");
