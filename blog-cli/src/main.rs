@@ -37,10 +37,10 @@ enum Commands {
         #[arg(long)]
         password: String,
     },
-    /// Вход; перезаписывает `.blog_token`.
+    /// Вход по email регистрации; перезаписывает `.blog_token`.
     Login {
         #[arg(long)]
-        username: String,
+        email: String,
         #[arg(long)]
         password: String,
     },
@@ -129,9 +129,9 @@ async fn run_command(client: &mut BlogClient, cmd: &Commands) -> anyhow::Result<
                 "user": user_json(&r.user),
             }))?;
         }
-        Commands::Login { username, password } => {
+        Commands::Login { email, password } => {
             let r = client
-                .login(username, password)
+                .login(email, password)
                 .await
                 .map_err(|e| anyhow::Error::msg(e.to_string()))?;
             save_token(Path::new(TOKEN_FILE), &r.token)?;
@@ -193,6 +193,7 @@ fn post_json(p: &Post) -> serde_json::Value {
         "id": p.id,
         "title": p.title,
         "content": p.content,
+        "author_username": p.author_username,
         "author_id": p.author_id,
         "created_at": p.created_at.to_rfc3339(),
         "updated_at": p.updated_at.to_rfc3339(),
@@ -227,4 +228,83 @@ fn load_token(path: &Path) -> anyhow::Result<Option<String>> {
 
 fn save_token(path: &Path, token: &str) -> anyhow::Result<()> {
     fs::write(path, token.trim().as_bytes()).with_context(|| format!("write {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use std::fs;
+
+    #[test]
+    fn clap_parses_register() {
+        let cli = Cli::parse_from([
+            "blog-cli",
+            "register",
+            "--username",
+            "alice",
+            "--email",
+            "a@b.cd",
+            "--password",
+            "password12",
+        ]);
+        match cli.command {
+            Commands::Register {
+                username,
+                email,
+                password,
+            } => {
+                assert_eq!(username, "alice");
+                assert_eq!(email, "a@b.cd");
+                assert_eq!(password, "password12");
+            }
+            _ => panic!("expected register"),
+        }
+    }
+
+    #[test]
+    fn clap_parses_global_server() {
+        let cli = Cli::parse_from([
+            "blog-cli",
+            "--server",
+            "http://127.0.0.1:9",
+            "list",
+            "--limit",
+            "5",
+            "--offset",
+            "10",
+        ]);
+        assert_eq!(cli.server.as_deref(), Some("http://127.0.0.1:9"));
+        match cli.command {
+            Commands::List { limit, offset } => {
+                assert_eq!(limit, 5);
+                assert_eq!(offset, 10);
+            }
+            _ => panic!("expected list"),
+        }
+    }
+
+    #[test]
+    fn token_load_save_trim() {
+        let dir = std::env::temp_dir().join(format!("blog_cli_token_{}", std::process::id()));
+        let _ = fs::remove_file(&dir);
+        save_token(&dir, "  tok\n").expect("save");
+        assert_eq!(load_token(&dir).expect("load").as_deref(), Some("tok"));
+        let _ = fs::remove_file(&dir);
+    }
+
+    #[test]
+    fn post_json_contains_author_username() {
+        let p = blog_client::Post {
+            id: 1,
+            title: "t".into(),
+            content: "c".into(),
+            author_id: 2,
+            author_username: "bob".into(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let v = post_json(&p);
+        assert_eq!(v["author_username"], "bob");
+    }
 }

@@ -75,14 +75,14 @@ pub async fn register(
 pub async fn login(
     client: &Client,
     base: &str,
-    username: &str,
+    email: &str,
     password: &str,
 ) -> Result<AuthResponse, BlogClientError> {
     let url = join_base(base, "/api/auth/login")?;
     let resp = client
         .post(url)
         .json(&serde_json::json!({
-            "username": username,
+            "email": email,
             "password": password,
         }))
         .send()
@@ -234,4 +234,25 @@ pub async fn list_posts(
         status,
         message: parse_error_json(&body),
     })
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    #[test]
+    fn join_base_strips_slash_and_appends_api_path() {
+        let u = join_base("http://127.0.0.1:8080/", "/api/posts").unwrap();
+        assert_eq!(u.as_str(), "http://127.0.0.1:8080/api/posts");
+    }
+
+    #[test]
+    fn parse_error_json_extracts_field() {
+        assert_eq!(parse_error_json(r#"{"error":"boom"}"#), "boom");
+    }
+
+    #[test]
+    fn parse_error_json_fallback_non_json() {
+        assert_eq!(parse_error_json("plain"), "plain");
+    }
 }

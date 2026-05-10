@@ -54,9 +54,9 @@ impl AuthService {
     ///
     /// Для единообразия с ТЗ «InvalidCredentials» скрывает отсутствие пользователя и неверный пароль.
     pub async fn login(&self, req: LoginRequest) -> Result<(String, User), DomainError> {
-        let username = req.username.trim();
-        validation::login_input(username, &req.password)?;
-        let user = match self.users.get_by_username(username).await {
+        let email = req.email.trim();
+        validation::login_input(email, &req.password)?;
+        let user = match self.users.get_by_email(email).await {
             Ok(u) => u,
             Err(DomainError::UserNotFound) => return Err(DomainError::InvalidCredentials),
             Err(e) => return Err(e),

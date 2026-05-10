@@ -1,41 +1,81 @@
-//! HTTP middleware для повторного использования Bearer JWT между маршрутами с одинаковой политикой.
+//! JWT middleware для маршрутов под `/api/posts`: публичные `GET` / `HEAD` / `OPTIONS` без токена,
+//! `POST` / `PUT` / `DELETE` — только с валидным `Authorization: Bearer`.
 //!
-//! `HttpAuthentication::bearer` читает заголовок до входа в обработчик; при успешной верификации
-//! объект [`Claims`](crate::infrastructure::jwt::Claims) кладётся в [`actix_web::HttpMessage::extensions`],
-//! откуда его забирает `ReqData<Claims>` уже в теле функции.
+//! Регистрация: `web::scope("/api/posts").wrap(actix_web::middleware::from_fn(jwt_posts_middleware))`.
+//! Для мутаций успешная проверка кладёт `infrastructure::jwt::Claims` в расширения запроса; в хендлере используйте `web::ReqData<Claims>`.
 //!
-//! Уровень средств Rust не даёт описать тип замыкания в сигнатуре функции; поэтому фабрика оформлена макросом,
-//! сохраняя единственный литерал замыкания и корректный `.clone()` в `HttpServer::new`.
+//! Сигнатура только `(ServiceRequest, Next<_>)`: иначе `Scope::wrap` в actix-web 4.13 не выводит `Transform` для `from_fn` с `Data<>` в аргументах.
 
-/// Собирает `HttpAuthentication` с проверкой JWT через [`crate::application::auth_service::AuthService`].
-///
-/// Аргумент: `Arc<AuthService>` (например `auth_service.clone()` из `main`). Результат можно клонировать
-/// и навешивать только на нужные методы постов — чтение остаётся без заголовка.
-macro_rules! jwt_bearer_middleware {
-    ($auth:expr) => {{
-        use actix_web::dev::ServiceRequest;
-        use actix_web::HttpMessage;
-        let auth: std::sync::Arc<crate::application::auth_service::AuthService> = $auth;
+use actix_web::body::BoxBody;
+use actix_web::error::ErrorUnauthorized;
+use actix_web::http::header::AUTHORIZATION;
+use actix_web::http::Method;
+use actix_web::middleware::Next;
+use actix_web::web::Data;
+use actix_web::{dev::ServiceRequest, dev::ServiceResponse};
+use actix_web::{Error, HttpMessage};
 
-        actix_web_httpauth::middleware::HttpAuthentication::bearer(
-            move |req: ServiceRequest,
-                  credentials: actix_web_httpauth::extractors::bearer::BearerAuth| {
-                let svc = auth.clone();
-                async move {
-                    match svc.verify_bearer(credentials.token()) {
-                        Ok(claims) => {
-                            req.extensions_mut().insert(claims);
-                            Ok(req)
-                        }
-                        Err(_) => Err((
-                            actix_web::error::ErrorUnauthorized("invalid or expired Bearer token"),
-                            req,
-                        )),
-                    }
-                }
-            },
-        )
-    }};
+use crate::application::auth_service::AuthService;
+
+/// Разбор значения заголовка `Authorization` (строка после `to_str`, уже одна линия).
+pub(crate) fn bearer_from_authorization_value(value: Option<&str>) -> Option<&str> {
+    let s = value?.trim();
+    let t = s
+        .strip_prefix("Bearer ")
+        .or_else(|| s.strip_prefix("bearer "))
+        .map(str::trim)
+        .filter(|x| !x.is_empty())?;
+    Some(t)
 }
 
-pub(crate) use jwt_bearer_middleware;
+fn bearer_raw(req: &ServiceRequest) -> Option<&str> {
+    bearer_from_authorization_value(
+        req.headers()
+            .get(AUTHORIZATION)
+            .and_then(|v| v.to_str().ok()),
+    )
+}
+
+/// Middleware на базе [`actix_web::middleware::from_fn`].
+pub async fn jwt_posts_middleware(
+    req: ServiceRequest,
+    next: Next<BoxBody>,
+) -> Result<ServiceResponse<BoxBody>, Error> {
+    match *req.method() {
+        Method::GET | Method::HEAD | Method::OPTIONS => return next.call(req).await,
+        _ => {}
+    }
+
+    let auth = req.app_data::<Data<AuthService>>().ok_or_else(|| {
+        actix_web::error::ErrorInternalServerError("AuthService missing from app data")
+    })?;
+
+    let token =
+        bearer_raw(&req).ok_or_else(|| ErrorUnauthorized("missing or malformed Authorization: Bearer header"))?;
+
+    let claims = auth
+        .verify_bearer(token)
+        .map_err(|_| ErrorUnauthorized("invalid or expired Bearer token"))?;
+
+    req.extensions_mut().insert(claims);
+    next.call(req).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bearer_parses_standard_header() {
+        assert_eq!(
+            bearer_from_authorization_value(Some("Bearer abc.def.ghi")),
+            Some("abc.def.ghi")
+        );
+    }
+
+    #[test]
+    fn bearer_rejects_missing() {
+        assert_eq!(bearer_from_authorization_value(None), None);
+        assert_eq!(bearer_from_authorization_value(Some("Basic xxx")), None);
+    }
+}

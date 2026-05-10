@@ -58,12 +58,12 @@ impl UserRepository {
         }
     }
 
-    /// Возвращает пользователя при точном совпадении имени входа или `UserNotFound`, если строки нет.
-    pub async fn get_by_username(&self, username: &str) -> Result<User, DomainError> {
+    /// Вход по email: строка совпадает с колонкой `email` после `trim()` на стороне сервиса.
+    pub async fn get_by_email(&self, email: &str) -> Result<User, DomainError> {
         sqlx::query_as::<_, User>(
-            r#"SELECT id, username, email, password_salt, password_hash, created_at FROM users WHERE username = $1"#,
+            r#"SELECT id, username, email, password_salt, password_hash, created_at FROM users WHERE email = $1"#,
         )
-        .bind(username)
+        .bind(email)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| DomainError::DataBaseInternal(e.to_string()))?

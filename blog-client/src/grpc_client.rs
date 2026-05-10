@@ -31,6 +31,7 @@ fn map_post(pb: crate::blog_pb::Post) -> Result<Post, BlogClientError> {
         title: pb.title,
         content: pb.content,
         author_id: pb.author_id,
+        author_username: pb.author_username,
         created_at: pb
             .created_at
             .parse()
@@ -86,12 +87,12 @@ pub async fn register(
 
 pub async fn login(
     client: &mut BlogServiceClient<tonic::transport::Channel>,
-    username: &str,
+    email: &str,
     password: &str,
 ) -> Result<AuthResponse, BlogClientError> {
     let inner = client
         .login(PbLogin {
-            username: username.to_string(),
+            email: email.to_string(),
             password: password.to_string(),
         })
         .await

@@ -24,3 +24,19 @@ pub enum DomainError {
     #[error("database error: {0}")]
     DataBaseInternal(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_validation() {
+        let e = DomainError::Validation("bad".into());
+        assert_eq!(e.to_string(), "bad");
+    }
+
+    #[test]
+    fn display_post_not_found() {
+        assert!(DomainError::PostNotFound.to_string().contains("post"));
+    }
+}

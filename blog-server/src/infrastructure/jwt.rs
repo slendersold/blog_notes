@@ -52,3 +52,32 @@ impl JwtService {
             .map_err(anyhow::Error::from)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SECRET: &str = "0123456789abcdef0123456789abcdef";
+
+    #[test]
+    fn try_new_rejects_short_secret() {
+        assert!(JwtService::try_new("short").is_err());
+    }
+
+    #[test]
+    fn generate_and_verify_roundtrip() {
+        let j = JwtService::try_new(SECRET).unwrap();
+        let t = j.generate_token(42, "bob").unwrap();
+        let c = j.verify_token(&t).unwrap();
+        assert_eq!(c.user_id, 42);
+        assert_eq!(c.username, "bob");
+    }
+
+    #[test]
+    fn wrong_secret_fails_verify() {
+        let a = JwtService::try_new(SECRET).unwrap();
+        let t = a.generate_token(1, "u").unwrap();
+        let b = JwtService::try_new("fedcba9876543210fedcba9876543210").unwrap();
+        assert!(b.verify_token(&t).is_err());
+    }
+}

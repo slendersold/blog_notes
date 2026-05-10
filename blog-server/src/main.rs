@@ -9,7 +9,10 @@ mod presentation;
 use std::sync::Arc;
 
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer};
+use actix_web::{
+    middleware::{self as actix_middleware},
+    web, App, HttpServer,
+};
 use anyhow::Context;
 use application::{auth_service::AuthService, blog_service::BlogService};
 use data::{post_repository::PostRepository, user_repository::UserRepository};
@@ -19,9 +22,13 @@ use infrastructure::{
     jwt::JwtService,
     logging::init_tracing,
 };
-use presentation::{grpc_service, grpc_service::GrpcBlogService, http_handlers, middleware};
+use presentation::{
+    grpc_service, grpc_service::GrpcBlogService, http_handlers, middleware as http_middleware,
+};
 use tonic::transport::Server;
 use tracing::info;
+
+use tokio::signal;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -48,9 +55,10 @@ async fn main() -> anyhow::Result<()> {
     let http_auth = auth_service.clone();
     let http_blog = blog_service.clone();
     let grpc_blog = GrpcBlogService::new(auth_service.clone(), blog_service.clone());
-    let jwt_posts = middleware::jwt_bearer_middleware!(auth_service.clone());
 
-    let http_server = HttpServer::new(move || {
+    // Без `disable_signals` Actix перехватывает SIGINT сам, а Tonic продолжает слушать —
+    // `join!` тогда «висит» после остановки HTTP. Один Ctrl+C: общий oneshot + `serve_with_shutdown`.
+    let server = HttpServer::new(move || {
         App::new()
             .wrap(Cors::permissive())
             .app_data(web::Data::from(http_auth.clone()))
@@ -63,38 +71,59 @@ async fn main() -> anyhow::Result<()> {
             )
             .service(
                 web::scope("/api/posts")
+                    .wrap(actix_middleware::from_fn(http_middleware::jwt_posts_middleware))
                     .route("", web::get().to(http_handlers::list_posts))
-                    .route(
-                        "",
-                        web::post()
-                            .wrap(jwt_posts.clone())
-                            .to(http_handlers::create_post),
-                    )
+                    .route("", web::post().to(http_handlers::create_post))
                     .route("/{id}", web::get().to(http_handlers::get_post))
-                    .route(
-                        "/{id}",
-                        web::put()
-                            .wrap(jwt_posts.clone())
-                            .to(http_handlers::update_post),
-                    )
-                    .route(
-                        "/{id}",
-                        web::delete()
-                            .wrap(jwt_posts.clone())
-                            .to(http_handlers::delete_post),
-                    ),
+                    .route("/{id}", web::put().to(http_handlers::update_post))
+                    .route("/{id}", web::delete().to(http_handlers::delete_post)),
             )
     })
+    .disable_signals()
     .bind(&http_addr)?
     .run();
+    let http_handle = server.handle();
+    let http_task = tokio::spawn(server);
 
-    let grpc_server = Server::builder()
-        .add_service(grpc_service::blog::blog_service_server::BlogServiceServer::new(grpc_blog));
+    let (grpc_shutdown_tx, grpc_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let grpc_task = tokio::spawn(
+        Server::builder()
+            .add_service(grpc_service::blog::blog_service_server::BlogServiceServer::new(
+                grpc_blog,
+            ))
+            .serve_with_shutdown(grpc_addr, async move {
+                let _ = grpc_shutdown_rx.await;
+            }),
+    );
 
     info!("HTTP listening on {}", http_addr);
     info!("gRPC listening on {}", grpc_port);
 
-    let grpc_task = grpc_server.serve(grpc_addr);
-    let (_http_res, _grpc_res) = tokio::join!(http_server, grpc_task);
+    signal::ctrl_c().await.ok();
+    info!("signal received, stopping HTTP and gRPC");
+
+    let _ = grpc_shutdown_tx.send(());
+
+    let stop = http_handle.stop(true);
+    stop.await;
+
+    let (http_res, grpc_res) = tokio::join!(http_task, grpc_task);
+    http_res??;
+    grpc_res??;
     Ok(())
+}
+
+#[cfg(test)]
+mod route_smoke {
+    use crate::presentation::http_handlers;
+    use actix_web::{web, App};
+
+    #[actix_web::test]
+    async fn health_route_without_db() {
+        let app =
+            actix_web::test::init_service(App::new().route("/health", web::get().to(http_handlers::health))).await;
+        let req = actix_web::test::TestRequest::get().uri("/health").to_request();
+        let resp = actix_web::test::call_service(&app, req).await;
+        assert!(resp.status().is_success());
+    }
 }

@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["blog-server", "blog-client", "blog-cli", "blog-wasm"]
+members = [
+    "blog-server",
+    "blog-client",
+    "blog-cli",
+    "blog-wasm",
+    "blog-integration-tests",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -20,7 +26,6 @@ prost-types = "0.13"
 tonic-build = "0.12"
 actix-cors = "0.7"
 actix-web = "4"
-actix-web-httpauth = "0.8"
 argon2 = { version = "0.5", features = ["std"] }
 password-hash = { version = "0.5", features = ["rand_core"] }
 dotenvy = "0.15"

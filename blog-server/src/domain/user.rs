@@ -27,9 +27,9 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
-/// Тело `POST /api/auth/login`; только идентификатор входа и открытый пароль для проверки.
+/// Тело `POST /api/auth/login`: вход по **email**, указанному при регистрации, и паролю.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginRequest {
-    pub username: String,
+    pub email: String,
     pub password: String,
 }

@@ -26,7 +26,7 @@ message RegisterRequest {
 }
 
 message LoginRequest {
-  string username = 1;
+  string email = 1;
   string password = 2;
 }
 
@@ -42,6 +42,7 @@ message Post {
   int64 author_id = 4;
   string created_at = 5;
   string updated_at = 6;
+  string author_username = 7;
 }
 
 message CreatePostRequest {

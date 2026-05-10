@@ -1,14 +1,14 @@
 services:
   postgres:
     image: postgres:17
-    container_name: blog_notes_postgres
+    # без container_name: второй стек (`docker compose -p …`) не конфликтует по имени контейнера
     restart: unless-stopped
     environment:
       POSTGRES_USER: blog_user
       POSTGRES_PASSWORD: blog_pass
       POSTGRES_DB: blog_db
     ports:
-      - "5432:5432"
+      - "${PG_HOST_PORT:-5432}:5432"
     volumes:
       - blog_notes_pgdata:/var/lib/postgresql/data
     healthcheck:

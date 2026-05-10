@@ -2,7 +2,7 @@
 
 use sqlx::PgPool;
 
-use crate::domain::{error::DomainError, post::Post};
+use crate::domain::{error::DomainError, post::{Post, PostPublic}};
 
 /// Репозиторий постов без бизнес-правил авторства — проверку владельца делает сервис.
 #[derive(Clone)]
@@ -16,18 +16,25 @@ impl PostRepository {
         Self { pool }
     }
 
-    /// Добавляет пост и возвращает полную строку с автогенерируемыми полями.
+    /// Добавляет пост; в ответе сразу **имя автора** через подзапрос к `users`.
     pub async fn insert(
         &self,
         title: &str,
         content: &str,
         author_id: i64,
-    ) -> Result<Post, DomainError> {
-        sqlx::query_as::<_, Post>(
+    ) -> Result<PostPublic, DomainError> {
+        sqlx::query_as::<_, PostPublic>(
             r#"
             INSERT INTO posts (title, content, author_id)
             VALUES ($1, $2, $3)
-            RETURNING id, title, content, author_id, created_at, updated_at
+            RETURNING
+                id,
+                title,
+                content,
+                author_id,
+                created_at,
+                updated_at,
+                (SELECT u.username FROM users u WHERE u.id = author_id) AS author_username
             "#,
         )
         .bind(title)
@@ -38,7 +45,7 @@ impl PostRepository {
         .map_err(|e| DomainError::DataBaseInternal(e.to_string()))
     }
 
-    /// Возвращает пост по ключу или `PostNotFound`.
+    /// Строка поста без JOIN (удобно только для проверки `author_id`).
     pub async fn get_by_id(&self, id: i64) -> Result<Post, DomainError> {
         sqlx::query_as::<_, Post>(
             r#"SELECT id, title, content, author_id, created_at, updated_at FROM posts WHERE id = $1"#,
@@ -50,21 +57,47 @@ impl PostRepository {
         .ok_or(DomainError::PostNotFound)
     }
 
-    /// Обновляет заголовок и текст; считает затронутые строки чтобы отличить «не найдено».
+    /// Публичное чтение с именем автора.
+    pub async fn get_public_by_id(&self, id: i64) -> Result<PostPublic, DomainError> {
+        sqlx::query_as::<_, PostPublic>(
+            r#"
+            SELECT p.id, p.title, p.content, p.author_id,
+                   u.username AS author_username,
+                   p.created_at, p.updated_at
+              FROM posts p
+             INNER JOIN users u ON u.id = p.author_id
+             WHERE p.id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| DomainError::DataBaseInternal(e.to_string()))?
+        .ok_or(DomainError::PostNotFound)
+    }
+
+    /// Обновляет пост владельцем и возвращает публичное представление с именем автора.
     pub async fn update(
         &self,
         id: i64,
         title: &str,
         content: &str,
         author_id: i64,
-    ) -> Result<Post, DomainError> {
-        let res = sqlx::query_as::<_, Post>(
+    ) -> Result<PostPublic, DomainError> {
+        let res = sqlx::query_as::<_, PostPublic>(
             r#"
-            UPDATE posts
+            UPDATE posts AS p
                SET title = $2, content = $3, updated_at = NOW()
-             WHERE id = $1 AND author_id = $4
-             RETURNING id, title, content, author_id, created_at, updated_at
-             "#,
+             WHERE p.id = $1 AND p.author_id = $4
+             RETURNING
+                p.id,
+                p.title,
+                p.content,
+                p.author_id,
+                p.created_at,
+                p.updated_at,
+                (SELECT u.username FROM users u WHERE u.id = p.author_id) AS author_username
+            "#,
         )
         .bind(id)
         .bind(title)
@@ -73,7 +106,7 @@ impl PostRepository {
         .fetch_optional(&self.pool)
         .await;
 
-        Self::must_one(res, DomainError::PostNotFound).await
+        Self::must_one_public(res, DomainError::PostNotFound).await
     }
 
     /// Удаляет пост только если автор совпадает; иначе `PostNotFound` (скрывает чужие id).
@@ -92,15 +125,20 @@ impl PostRepository {
         }
     }
 
-    /// Список страницы упорядочен по времени создания новее сверху.
-    ///
-    /// Вторая составляющая — общее число строк в таблице (для клиентской пагинации).
-    pub async fn page(&self, limit: i64, offset: i64) -> Result<(Vec<Post>, i64), DomainError> {
-        let rows = sqlx::query_as::<_, Post>(
+    /// Страница списка: новее сверху, с `author_username`.
+    pub async fn page(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<(Vec<PostPublic>, i64), DomainError> {
+        let rows = sqlx::query_as::<_, PostPublic>(
             r#"
-            SELECT id, title, content, author_id, created_at, updated_at
-              FROM posts
-             ORDER BY created_at DESC
+            SELECT p.id, p.title, p.content, p.author_id,
+                   u.username AS author_username,
+                   p.created_at, p.updated_at
+              FROM posts p
+             INNER JOIN users u ON u.id = p.author_id
+             ORDER BY p.created_at DESC
              LIMIT $1 OFFSET $2
             "#,
         )
@@ -118,10 +156,10 @@ impl PostRepository {
         Ok((rows, total))
     }
 
-    async fn must_one(
-        attempt: sqlx::Result<Option<Post>>,
+    async fn must_one_public(
+        attempt: sqlx::Result<Option<PostPublic>>,
         missing: DomainError,
-    ) -> Result<Post, DomainError> {
+    ) -> Result<PostPublic, DomainError> {
         match attempt {
             Err(e) => Err(DomainError::DataBaseInternal(e.to_string())),
             Ok(Some(p)) => Ok(p),

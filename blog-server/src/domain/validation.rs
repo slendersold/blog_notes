@@ -52,23 +52,40 @@ pub fn register_input(username: &str, email: &str, password: &str) -> Result<(),
     Ok(())
 }
 
-/// Проверка для входа: достаточно длины полей после обрезки пробелов по краям имени пользователя.
-pub fn login_input(username: &str, password: &str) -> Result<(), DomainError> {
-    if username.is_empty() || password.is_empty() {
+/// Проверка для входа по email и паролю (email — после `trim()`, как при регистрации).
+pub fn login_input(email_trimmed: &str, password: &str) -> Result<(), DomainError> {
+    if email_trimmed.is_empty() || password.is_empty() {
         return Err(DomainError::Validation(
-            "username and password must be non-empty".into(),
+            "email and password must be non-empty".into(),
         ));
     }
-    let ulen = username.chars().count();
-    if !(USERNAME_MIN..=USERNAME_MAX).contains(&ulen) {
-        return Err(DomainError::Validation(format!(
-            "username length must be between {USERNAME_MIN} and {USERNAME_MAX} Unicode scalars",
-        )));
-    }
+    validate_email_like_login(email_trimmed)?;
     if password.len() < PASSWORD_MIN || password.len() > PASSWORD_MAX {
         return Err(DomainError::Validation(format!(
             "password length must be between {PASSWORD_MIN} and {PASSWORD_MAX}",
         )));
+    }
+    Ok(())
+}
+
+fn validate_email_like_login(email: &str) -> Result<(), DomainError> {
+    let parts: Vec<&str> = email.split('@').collect();
+    if parts.len() != 2 {
+        return Err(DomainError::Validation(
+            "email must contain exactly one @".into(),
+        ));
+    }
+    let local = parts[0];
+    let domain = parts[1];
+    if local.is_empty()
+        || domain.is_empty()
+        || domain.starts_with('.')
+        || domain.ends_with('.')
+        || !domain.contains('.')
+    {
+        return Err(DomainError::Validation(
+            "invalid email shape for login".into(),
+        ));
     }
     Ok(())
 }
@@ -91,4 +108,50 @@ pub fn post_payload(title: &str, content: &str) -> Result<(), DomainError> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::error::DomainError;
+
+    #[test]
+    fn register_ok() {
+        assert!(register_input("alice", "a@b.cd", "password12").is_ok());
+    }
+
+    #[test]
+    fn register_username_too_short() {
+        assert!(matches!(
+            register_input("ab", "a@b.cd", "password12"),
+            Err(DomainError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn register_bad_email() {
+        assert!(register_input("alice", "no-at", "password12").is_err());
+        assert!(register_input("alice", "@b.cd", "password12").is_err());
+        assert!(register_input("alice", "a@.cd", "password12").is_err());
+    }
+
+    #[test]
+    fn login_empty_email() {
+        assert!(matches!(
+            login_input("", "password12"),
+            Err(DomainError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn post_payload_trim_empty_title() {
+        assert!(post_payload("   ", "hi").is_err());
+    }
+
+    #[test]
+    fn post_title_byte_limit() {
+        let t = "я".repeat(TITLE_MAX / 2 + 2);
+        assert!(t.len() > TITLE_MAX);
+        assert!(post_payload(&t, "c").is_err());
+    }
 }

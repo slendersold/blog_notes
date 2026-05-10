@@ -4,10 +4,13 @@
 
 #![forbid(unsafe_code)]
 
+mod jwt_payload;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use gloo_net::http::Request;
+use js_sys::{Object, Reflect};
 use web_sys::window;
 
 const LS_TOKEN: &str = "blog_token";
@@ -33,6 +36,7 @@ struct PostDto {
     title: String,
     content: String,
     author_id: i64,
+    author_username: String,
     created_at: String,
     updated_at: String,
 }
@@ -111,16 +115,28 @@ impl BlogApp {
     }
 
     /// Текущий пользователь `{ user_id, username }` или `null`.
+    ///
+    /// Собираем поля через `js_sys`: `serde_wasm_bindgen::to_value(serde_json::Value)` здесь давал ошибку конвертации `i64` → JS и молча подменялся на `NULL`, из‑за чего UI терял имя пользователя при живом JWT.
     #[wasm_bindgen(js_name = session)]
-    pub fn session_js(&self) -> JsValue {
-        match (self.user_id, self.username.clone()) {
-            (Some(id), Some(ref name)) => serde_wasm_bindgen::to_value(&serde_json::json!({
-                "user_id": id,
-                "username": name,
-            }))
-            .unwrap_or(JsValue::NULL),
-            _ => JsValue::NULL,
-        }
+    pub fn session_js(&mut self) -> JsValue {
+        self.hydrate_user_from_jwt_payload();
+        let Some(id) = self.user_id else {
+            return JsValue::NULL;
+        };
+        let Some(name) = self
+            .username
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        else {
+            return JsValue::NULL;
+        };
+
+        let o = Object::new();
+        let uid_js = JsValue::bigint_from_str(&id.to_string());
+        let _ = Reflect::set(&o, &JsValue::from_str("user_id"), &uid_js);
+        let _ = Reflect::set(&o, &JsValue::from_str("username"), &JsValue::from_str(name));
+        o.into()
     }
 
     /// Регистрация; сохраняет JWT и профиль в память и в storage.
@@ -149,10 +165,10 @@ impl BlogApp {
     }
 
     /// Вход; сохраняет JWT и профиль.
-    pub async fn login(&mut self, username: &str, password: &str) -> Result<JsValue, JsValue> {
+    pub async fn login(&mut self, email: &str, password: &str) -> Result<JsValue, JsValue> {
         let url = format!("{}/api/auth/login", self.base);
         let body = serde_json::json!({
-            "username": username,
+            "email": email,
             "password": password,
         });
         let resp = Request::post(&url)
@@ -268,14 +284,49 @@ impl BlogApp {
         }
         if let Some(s) = read_user_json_from_storage() {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
-                if let (Some(id), Some(name)) = (
-                    v.get("id").and_then(|x| x.as_i64()),
-                    v.get("username").and_then(|x| x.as_str()),
-                ) {
+                let id = v
+                    .get("user_id")
+                    .and_then(|x| x.as_i64())
+                    .or_else(|| v.get("id").and_then(|x| x.as_i64()));
+                let name = v.get("username").and_then(|x| x.as_str());
+                if let (Some(id), Some(name)) = (id, name) {
                     self.user_id = Some(id);
                     self.username = Some(name.to_string());
                 }
             }
+        }
+        self.hydrate_user_from_jwt_payload();
+    }
+
+    /// Если в storage только JWT (без профиля), подтягиваем `user_id` и `username` из payload (без проверки подписи — для UI; API по-прежнему валидирует Bearer).
+    fn hydrate_user_from_jwt_payload(&mut self) {
+        let name_ok = self
+            .username
+            .as_ref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+        if self.user_id.is_some() && name_ok {
+            return;
+        }
+        let Some(token) = self.token.as_deref() else {
+            return;
+        };
+        let Some((id, name)) = jwt_payload::claims_from_jwt_payload_unverified(token) else {
+            return;
+        };
+        let name_trim = name.trim().to_string();
+        if name_trim.is_empty() {
+            return;
+        }
+        self.user_id.get_or_insert(id);
+        match &self.username {
+            None => self.username = Some(name_trim.clone()),
+            Some(s) if s.trim().is_empty() => self.username = Some(name_trim.clone()),
+            _ => {}
+        }
+        let u = serde_json::json!({ "id": id, "username": name_trim });
+        if let Ok(s) = serde_json::to_string(&u) {
+            persist_user_json(&s);
         }
     }
 

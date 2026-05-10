@@ -2,6 +2,16 @@
 
 Workspace блог на Rust: REST и gRPC бэкенд блога, общая клиентская библиотека, CLI и браузерный фронт на WebAssembly. Данные — PostgreSQL, аутентификация — JWT (Bearer).
 
+## Контракт входа: email, не username
+
+В учебном ТЗ для `POST /api/auth/login` иногда приведён JSON с полем **`username`**. В этом репозитории **везде согласован вход по `email`** (тот же, что при регистрации) и **`password`**:
+
+- HTTP **`POST /api/auth/login`**, gRPC **`LoginRequest`** в `proto/blog.proto`;
+- **blog-cli**: `login --email … --password …`;
+- **blog-wasm** и **`index.html`**: форма входа по email.
+
+Регистрация по-прежнему: **`username`**, **`email`**, **`password`**. Если проверяющий ожидает пример с `username` в теле логина — используйте **`email`** или согласуйте отличие явно.
+
 ## Архитектура и крейты
 
 | Крейт | Назначение |
@@ -10,10 +20,11 @@ Workspace блог на Rust: REST и gRPC бэкенд блога, общая �
 | **blog-client** | Библиотека: один API для двух транспортов — `Transport::Http` (reqwest, REST `/api/...`) и `Transport::Grpc` (tonic, код из `proto/blog.proto`). Хранит JWT после `register` / `login`. |
 | **blog-cli** | Консольная утилита поверх `blog-client`: подкоманды register, login, CRUD постов, list; токен сохраняется в `.blog_token` в текущей директории. |
 | **blog-wasm** | Фронт в браузере: `wasm-bindgen`, HTTP через `gloo-net`, JWT в `localStorage` (ключ `blog_token`). Сборка даёт JS-glue в `blog-wasm/pkg/`. |
+| **blog-integration-tests** | Интеграционный сценарий: Postgres в Docker + сервер + пять параллельных CLI; не обязателен для ручного запуска блога. |
 
 Связь по данным: **blog-server** — источник истины в БД. **blog-client** не зависит от сервера как от крейта, только совместим по контрактам API.
 
-В **одном workspace** все четыре крейта лежат «рядом» в дереве каталогов — это не рисунок зависимостей. По **Cargo** бинарник **blog-cli** объявляет зависимость на библиотеку **blog-client** и вызывает её из своего `main`. **blog-wasm** к **`blog-client` не подключается**: в браузере HTTP идёт через `gloo-net` напрямую к REST сервера.
+В **одном Cargo workspace** пять членов (четыре основных крейта по ТЗ плюс **blog-integration-tests**). По **Cargo** бинарник **blog-cli** зависит от **blog-client**; **blog-wasm** к **blog-client не подключается**: в браузере HTTP идёт через `gloo-net` к REST сервера.
 
 ```text
                     ┌─────────────┐
@@ -80,7 +91,7 @@ Workspace блог на Rust: REST и gRPC бэкенд блога, общая �
 docker compose up -d
 ```
 
-Поднимется Postgres с пользователем `blog_user`, паролем `blog_pass`, БД `blog_db`, порт **5432**. Строка подключения может совпадать с `.env.example`.
+Поднимется Postgres с пользователем `blog_user`, паролем `blog_pass`, БД `blog_db`, порт **5432** по умолчанию (`PG_HOST_PORT` в `docker-compose.yml` — другой порт, если занят или для изолированного стека интеграционных тестов). Строка подключения может совпадать с `.env.example`.
 
 ### Вариант B: локальный Postgres
 
@@ -102,21 +113,64 @@ cargo fmt --all -- --check
 
 ---
 
+## Тесты (локально)
+
+| Задача | Команды (из каталога `blog_notes`) |
+|--------|-------------------------------------|
+| Все юнит- и интеграционные тесты крейтов, **кроме** тяжёлого Docker-сценария | `cargo test --workspace --exclude blog-integration-tests` |
+| Полный прогон, включая **blog-integration-tests** (нужны **Docker** и **Compose v2**) | Сначала `cargo build -p blog-cli -p blog-server`, затем `cargo test --workspace` или только `cargo test -p blog-integration-tests --test cli_five_clients_integration` |
+| Миграции на живой Postgres (переменная **`DATABASE_URL`**, тест помечен **`#[ignore]`**) | `cargo test -p blog-server --test migrations_integration -- --ignored --nocapture` |
+
+Крейт **blog-integration-tests** в `build.rs` проверяет наличие бинарников `blog-cli` и `blog-server` в каталоге target (в т.ч. `tmp/target`); при отсутствии — сообщение с подсказкой собрать их явно.
+
+---
+
+## CI (GitHub Actions)
+
+В **`.github/workflows/`** настроены проверки:
+
+| Файл | Когда | Содержание |
+|------|--------|------------|
+| **`ci-main.yml`** | Пуш и **pull request** в `main` / `master`, вручную (**Actions → Run workflow**) | `fmt`, `clippy -D warnings`, `cargo build --workspace`, сборка **blog-cli** + **blog-server**, **`cargo test --workspace`**, тест миграций с Postgres service (`--ignored`), сборка **blog-wasm** под `wasm32-unknown-unknown`. Для сценария **blog-integration-tests** на раннере доступен Docker. |
+| **`ci-branch-*.yml`** | Пуш в прочие ветки при изменении соответствующих путей | Ускоренные проверки отдельных крейтов без полного прогона. |
+
+Локально повторить главный сценарий: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --no-deps -- -D warnings`, затем команды из раздела **Тесты**.
+
+Если на GitHub корень репозитория **не** совпадает с каталогом workspace (например workspace в подкаталоге), в workflow нужно задать **`defaults.run.working-directory`** на этот каталог.
+
+---
+
 ## Запуск компонентов
+
+Нужны файл **`.env`** в корне `blog_notes` (см. `.env.example`), поднятая БД (**`docker compose up -d`** или свой Postgres).
 
 ### Сервер (`blog-server`)
 
+Сервер сам подхватывает `.env` (через `dotenvy`).
+
 ```bash
-cargo run --bin blog-server
+./scripts/run-server.sh
 ```
+
+Эквивалент: `cargo run --bin blog-server` из каталога `blog_notes`.
 
 Ожидаемо:
 
-- HTTP: `http://127.0.0.1:8080` (или `HTTP_PORT`).
+- HTTP: `http://127.0.0.1:8080` (или `HTTP_PORT` в `.env`).
 - gRPC: порт `50051` (или `GRPC_PORT`).
 - Проверка живости: `GET /health`.
 
-Остановка: `Ctrl+C`.
+Остановка: **Ctrl+C** (корректно гасятся и HTTP, и gRPC).
+
+### Статическая раздача WASM (`index.html` + `blog-wasm/pkg/`)
+
+После `./scripts/build-wasm-web.sh` (или `wasm-pack build --target web` в `blog-wasm/`):
+
+```bash
+./scripts/serve-wasm-web.sh
+```
+
+По умолчанию порт **8765**; аргументом можно задать другой, например `./scripts/serve-wasm-web.sh 8000`. В браузере откройте напечатанный URL; **`API_BASE`** в `index.html` должен совпадать с HTTP-портом сервера.
 
 ### Клиентская библиотека (`blog-client`)
 
@@ -142,7 +196,7 @@ cargo run -p blog-cli -- register \
   --password secret123
 
 # Вход
-cargo run -p blog-cli -- login --username alice --password secret123
+cargo run -p blog-cli -- login --email alice@example.com --password secret123
 
 # Посты (нужен предыдущий login/register в этой же директории)
 cargo run -p blog-cli -- create --title "Привет" --content "Текст поста"
@@ -153,11 +207,13 @@ cargo run -p blog-cli -- delete --id 1
 
 # Тот же сценарий по gRPC
 cargo run -p blog-cli -- --grpc register --username bob --email bob@example.com --password secret456
-cargo run -p blog-cli -- --grpc login --username bob --password secret456
+cargo run -p blog-cli -- --grpc login --email bob@example.com --password secret456
 cargo run -p blog-cli -- --grpc create --title "gRPC пост" --content "Содержание"
 ```
 
 ### WASM-фронт (`blog-wasm`)
+
+Кратко: сборка артефактов, затем **`./scripts/serve-wasm-web.sh`** (см. выше).
 
 1. Соберите модуль и JS-glue:
 
@@ -174,13 +230,11 @@ cargo run -p blog-cli -- --grpc create --title "gRPC пост" --content "Сод
    wasm-pack build --target web
    ```
 
-2. Поднимите статический сервер в **корне проекта** (рядом с `index.html`):
+2. Запустите раздачу статики из корня `blog_notes` — **`./scripts/serve-wasm-web.sh [порт]`** или вручную `python3 -m http.server` из того же каталога.
 
-   ```bash
-   python3 -m http.server 8000
-   ```
+3. Откройте в браузере напечатанный URL. **`API_BASE`** в `index.html` (по умолчанию `http://127.0.0.1:8080`) должен указывать на ваш HTTP-бэкенд.
 
-3. Откройте в браузере страницу с хоста и порта сервера (например `http://localhost:8000`). В форме укажите базовый URL API, например `http://127.0.0.1:8080`.
+**Кеш браузера:** при странном UI сделайте жёсткое обновление (**Ctrl+Shift+R** / **Cmd+Shift+R**). Регистрация и **вход по email** — см. раздел «Контракт входа» выше.
 
 Сгенерированный каталог **`blog-wasm/pkg/`** обычно не коммитится; после клонирования сборку нужно повторить.
 
@@ -198,8 +252,13 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"curl_user","email":"curl@example.com","password":"secret123"}'
 
-# Ответ содержит token — подставьте в переменную:
+# Ответ содержит token — подставьте в переменную (для шагов ниже часто достаточно токена из register):
 export TOKEN="<jwt из ответа>"
+
+# Отдельный вход пользователя, уже зарегистрированного ранее (в теле — email и password)
+curl -s -X POST http://127.0.0.1:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"curl@example.com","password":"secret123"}'
 
 # Создание поста
 curl -s -X POST http://127.0.0.1:8080/api/posts \
@@ -216,13 +275,13 @@ curl -s http://127.0.0.1:8080/api/posts/1
 
 ### CLI
 
-Полный цикл: `register` → `create` → `list` → `get` → `update` → `delete` (команды выше).
+Полный цикл: `register` → **`login` по `--email`** (если новая сессия без `.blog_token`) → `create` → `list` → `get` → `update` → `delete` (примеры в разделе CLI выше).
 
 ### Браузер
 
-1. Запущены Postgres, `blog-server`, собран `blog-wasm/pkg`, открыт `index.html` через локальный HTTP-сервер.
-2. Указать базовый URL API.
-3. Зарегистрироваться или войти — токен сохранится в `localStorage`.
+1. Запущены Postgres, `./scripts/run-server.sh` (или `cargo run --bin blog-server`), собран `blog-wasm/pkg`, статика через **`./scripts/serve-wasm-web.sh`**.
+2. При необходимости поправить `API_BASE` в `index.html` под свой бэкенд.
+3. Регистрация или **вход по email** — токен в `localStorage` (см. «Контракт входа»).
 4. Создать пост; для своих постов доступны изменение и удаление.
 
 ---
@@ -232,6 +291,7 @@ curl -s http://127.0.0.1:8080/api/posts/1
 - Токен CLI: файл **`.blog_token`** в рабочей директории (не коммитится).
 - Ошибки и запросы сервера логируются через **tracing** (уровень можно задать переменной окружения, например `RUST_LOG=info`).
 - CORS на HTTP настроен пермиссивно для локальной разработки фронта.
+- Проверки в CI: раздел **CI (GitHub Actions)** и каталог **`.github/workflows/`**.
 
 ## Лицензия
 

@@ -47,6 +47,8 @@ pub struct Post {
     pub title: String,
     pub content: String,
     pub author_id: i64,
+    /// Имя автора для интерфейса (не email).
+    pub author_username: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -175,12 +177,12 @@ impl BlogClient {
         Ok(out)
     }
 
-    pub async fn login(&mut self, username: &str, password: &str) -> Result<AuthResponse> {
+    pub async fn login(&mut self, email: &str, password: &str) -> Result<AuthResponse> {
         let out = match &self.transport {
-            Transport::Http(base) => http_client::login(self.http()?, base, username, password)
+            Transport::Http(base) => http_client::login(self.http()?, base, email, password)
                 .await
                 .map_err(map_http_chain)?,
-            Transport::Grpc(_) => grpc_client::login(self.grpc_mut()?, username, password).await?,
+            Transport::Grpc(_) => grpc_client::login(self.grpc_mut()?, email, password).await?,
         };
         self.token = Some(out.token.clone());
         Ok(out)
@@ -249,5 +251,38 @@ impl BlogClient {
             .filter(|s| !s.is_empty())
             .ok_or(BlogClientError::Unauthorized)?;
         Ok(t)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BlogClientError;
+    use tonic::Status;
+
+    #[test]
+    fn grpc_not_found_maps_to_not_found() {
+        let e = BlogClientError::from_grpc_status(Status::not_found("x"));
+        assert!(matches!(e, BlogClientError::NotFound));
+    }
+
+    #[test]
+    fn grpc_unauthenticated_maps_unauthorized() {
+        let e = BlogClientError::from_grpc_status(Status::unauthenticated("x"));
+        assert!(matches!(e, BlogClientError::Unauthorized));
+    }
+
+    #[test]
+    fn grpc_invalid_argument_maps_invalid_request() {
+        let e = BlogClientError::from_grpc_status(Status::invalid_argument("bad"));
+        assert!(matches!(
+            e,
+            BlogClientError::InvalidRequest { message } if message == "bad"
+        ));
+    }
+
+    #[test]
+    fn transport_clone_eq() {
+        let a = super::Transport::Http("http://h".into());
+        assert_eq!(a.clone(), a);
     }
 }

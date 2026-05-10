@@ -2,6 +2,8 @@
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
+    <!-- При странном UI: жёсткое обновление (Ctrl+Shift+R) или при открытии из неверной папки — см. README. -->
+    <meta http-equiv="Cache-Control" content="no-cache" />
     <title>Blog — WASM</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
@@ -13,6 +15,118 @@
         max-width: 52rem;
         margin: 1.5rem auto;
         padding: 0 1rem;
+      }
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 300;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem 1rem;
+        padding: 0.55rem 1rem;
+        margin: 0 -1rem 1rem;
+        width: calc(100% + 2rem);
+        box-sizing: border-box;
+        background: linear-gradient(
+          to bottom,
+          #f9fafb,
+          #eceef2
+        );
+        border-bottom: 1px solid #ccc;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
+      .header-brand {
+        flex: 0 0 auto;
+      }
+      .header-brand h1 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+      .header-search {
+        flex: 1 1 10rem;
+        min-width: 0;
+      }
+      .header-user {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        justify-content: flex-end;
+      }
+      /* Поиск в духе Discord: компактное поле справа */
+      .post-search-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0.65rem;
+        border-radius: 6px;
+        background: #e3e5e9;
+        border: 1px solid #cdd0d7;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .post-search-wrap:focus-within {
+        border-color: #5865f2;
+        background: #f5f6f8;
+      }
+      .post-search-wrap .search-icon {
+        flex-shrink: 0;
+        width: 1rem;
+        height: 1rem;
+        opacity: 0.55;
+      }
+      #post-search {
+        flex: 1;
+        min-width: 0;
+        border: none;
+        background: transparent;
+        font: inherit;
+        outline: none;
+        max-width: none;
+      }
+      #post-search::placeholder {
+        color: #6b7280;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+      article.post-card-editing {
+        border-color: #5865f2;
+        box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
+      }
+      article .inline-title {
+        font: inherit;
+        font-weight: 700;
+        font-size: 1.05rem;
+        width: 100%;
+        margin: 0;
+        padding: 0.25rem 0.4rem;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      article .inline-content {
+        width: 100%;
+        margin: 0.5rem 0 0;
+        min-height: 7rem;
+        font: inherit;
+        line-height: 1.45;
+        padding: 0.45rem 0.5rem;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        resize: vertical;
       }
       fieldset {
         margin-bottom: 1rem;
@@ -37,15 +151,86 @@
         padding: 0.75rem 1rem;
         margin-bottom: 0.75rem;
         border-radius: 6px;
+        position: relative;
       }
-      #posts h3 {
-        margin: 0 0 0.35rem;
+      .post-head {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.35rem;
       }
-      #auth-banner {
-        padding: 0.5rem 0.75rem;
-        background: #f4f4f4;
+      .post-head h3 {
+        margin: 0;
+        flex: 1;
+        min-width: 0;
+      }
+      .post-menu-wrap {
+        position: relative;
+        flex-shrink: 0;
+      }
+      .post-menu-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        border: 1px solid #cfcfcf;
         border-radius: 6px;
-        margin-bottom: 1rem;
+        background: #fafafa;
+        cursor: pointer;
+        color: #444;
+        line-height: 1;
+      }
+      .post-menu-trigger:hover {
+        background: #eee;
+        border-color: #bbb;
+      }
+      .post-menu-dots {
+        font-size: 1.35rem;
+        font-weight: 700;
+        letter-spacing: -0.15em;
+        transform: translateY(-1px);
+      }
+      .post-menu-dropdown {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        min-width: 11rem;
+        padding: 0.35rem 0;
+        margin: 0;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        z-index: 80;
+      }
+      .post-menu-dropdown[hidden] {
+        display: none !important;
+      }
+      .post-menu-item {
+        display: block;
+        width: 100%;
+        margin: 0;
+        padding: 0.5rem 0.85rem;
+        border: none;
+        background: none;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        color: #111;
+      }
+      .post-menu-item:hover {
+        background: #f4f4f4;
+      }
+      .post-menu-item.post-menu-delete {
+        color: #b00020;
+        font-weight: 600;
+      }
+      .post-menu-item.post-menu-delete:hover {
+        background: #ffecec;
       }
       #msg {
         color: #b00020;
@@ -61,68 +246,106 @@
         flex-wrap: wrap;
         align-items: center;
       }
+      .flow-hint {
+        margin: 0 0 1rem;
+        max-width: 40rem;
+        line-height: 1.5;
+      }
+      .auth-details {
+        margin-bottom: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem 0.75rem;
+        background: #fafafa;
+      }
+      .auth-details > summary {
+        cursor: pointer;
+        font-weight: 600;
+        padding: 0.25rem 0;
+      }
     </style>
   </head>
   <body>
-    <h1>Блог (WebAssembly)</h1>
-    <p class="muted">
-      Сборка: из корня проекта <code>./scripts/build-wasm-web.sh</code> или
-      <code>cd blog-wasm && wasm-pack build --target web</code>. Затем из этого каталога:
-      <code>python3 -m http.server 8000</code> и откройте эту страницу.
+    <header class="site-header">
+      <div class="header-brand">
+        <h1>Блог (WebAssembly)</h1>
+      </div>
+      <div class="header-search">
+        <label class="post-search-wrap" for="post-search">
+          <span class="visually-hidden">Поиск по заметкам</span>
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z" stroke="currentColor" stroke-width="2"/>
+            <path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input
+            type="search"
+            id="post-search"
+            placeholder="Искать: автор, дата, слова из заголовка или текста…"
+            autocomplete="off"
+          />
+        </label>
+      </div>
+      <div class="header-user">
+        <span>
+          <strong>Пользователь:</strong> <span id="auth-status">…</span>
+        </span>
+        <button type="button" id="btn-logout" hidden>Выйти</button>
+      </div>
+    </header>
+
+    <p id="hint-editor" class="muted flow-hint" hidden>
+      <strong>Новая заметка:</strong> заполните заголовок и текст в форме ниже и нажмите
+      «Опубликовать». У своих заметок откройте меню «⋮» в карточке (изменить или удалить).
     </p>
 
-    <div class="row">
-      <label>
-        Базовый URL API
-        <input id="api-base" type="text" value="http://127.0.0.1:8080" />
-      </label>
-      <button type="button" id="btn-reconnect">Применить URL</button>
-    </div>
+    <details id="auth-details" class="auth-details">
+      <summary>Вход или регистрация</summary>
+      <p id="hint-guest" class="muted flow-hint">
+        Чтобы <strong>писать новые заметки</strong>, заполните одну из форм ниже. Список всех заметок
+        ниже виден без входа.
+      </p>
 
-    <div id="auth-banner">
-      <strong>Статус:</strong> <span id="auth-status">…</span>
-      <button type="button" id="btn-logout" hidden>Выйти</button>
-    </div>
+      <fieldset id="fieldset-register">
+        <legend>Регистрация</legend>
+        <form id="form-register">
+          <label>Имя <input name="username" type="text" autocomplete="username" /></label>
+          <label>Email <input name="email" type="email" autocomplete="email" /></label>
+          <label>Пароль <input name="password" type="password" autocomplete="new-password" /></label>
+          <button type="submit">Зарегистрироваться</button>
+        </form>
+      </fieldset>
 
-    <fieldset id="fieldset-register">
-      <legend>Регистрация</legend>
-      <form id="form-register">
-        <label>Имя <input name="username" type="text" autocomplete="username" /></label>
-        <label>Email <input name="email" type="email" autocomplete="email" /></label>
-        <label>Пароль <input name="password" type="password" autocomplete="new-password" /></label>
-        <button type="submit">Зарегистрироваться</button>
-      </form>
-    </fieldset>
-
-    <fieldset id="fieldset-login">
-      <legend>Вход</legend>
-      <form id="form-login">
-        <label>Имя <input name="username" type="text" autocomplete="username" /></label>
-        <label>Пароль <input name="password" type="password" autocomplete="current-password" /></label>
-        <button type="submit">Войти</button>
-      </form>
-    </fieldset>
+      <fieldset id="fieldset-login">
+        <legend>Вход</legend>
+        <form id="form-login">
+          <label>Email (как при регистрации) <input name="email" type="email" autocomplete="email" /></label>
+          <label>Пароль <input name="password" type="password" autocomplete="current-password" /></label>
+          <button type="submit">Войти</button>
+        </form>
+      </fieldset>
+    </details>
 
     <fieldset id="fieldset-post" hidden>
-      <legend id="post-legend">Новый пост</legend>
+      <legend id="post-legend">Новая заметка</legend>
       <form id="form-post">
-        <input type="hidden" name="edit-id" id="edit-id" value="" />
         <label>Заголовок <input name="title" type="text" /></label>
         <label>Содержание <textarea name="content"></textarea></label>
         <div class="row">
           <button type="submit" id="btn-post-submit">Опубликовать</button>
-          <button type="button" id="btn-cancel-edit" hidden>Отменить редактирование</button>
         </div>
       </form>
     </fieldset>
 
     <p id="msg"></p>
 
-    <h2>Посты</h2>
+    <h2>Все заметки</h2>
     <div id="posts"></div>
 
     <script type="module">
       import init, { BlogApp } from "./blog-wasm/pkg/blog_wasm.js";
+
+      /** Совпадает с HTTP по умолчанию на сервере (`HTTP_PORT` / 8080). */
+      const API_BASE = "http://127.0.0.1:8080";
 
       const $ = (id) => document.getElementById(id);
 
@@ -132,43 +355,115 @@
         return typeof x === "bigint" ? Number(x) : Number(x);
       }
 
+      /** ISO 8601 (…T…Z) → `YYYY-MM-DD     HH:MM:SS` без долей секунды. */
+      function formatPostDate(iso) {
+        if (iso == null || iso === "") return "";
+        const s = String(iso).trim();
+        const m = s.match(/^(\d{4}-\d{2}-\d{2})[T t](\d{2}:\d{2}:\d{2})/);
+        if (m) return `${m[1]}     ${m[2]}`;
+        return s;
+      }
+
       let app;
-      /** @type {number | null} */
-      let editingPostId = null;
+      /** Кэш последнего списка с сервера (поиск без повторной загрузки). */
+      let cachedPosts = [];
+      /** Отмена текущего несохранённого редактирования в карточке. */
+      /** @type {{ id: number, html: string, p: object } | null} */
+      let inlineEditBackup = null;
 
       function setMsg(text) {
         $("msg").textContent = text || "";
       }
 
-      function apiBase() {
-        const v = $("api-base").value.trim();
-        return v || "http://127.0.0.1:8080";
+      /** Сообщения из WASM/сети в читаемую строку для красной строки ошибок. */
+      function wasmErrMsg(e) {
+        if (e == null || e === undefined) {
+          return "Ошибка без текста — откройте консоль браузера (F12 → Console).";
+        }
+        if (typeof e === "string") return e;
+        if (typeof e.message === "string" && e.message.trim()) return e.message;
+        try {
+          return JSON.stringify(e);
+        } catch {
+          return String(e);
+        }
       }
 
-      function recreateApp() {
-        app = new BlogApp(apiBase());
+      function createApp() {
+        app = new BlogApp(API_BASE);
         refreshAuthUi();
+      }
+
+      function closeAuthGate() {
+        const ad = $("auth-details");
+        if (ad) ad.removeAttribute("open");
       }
 
       function refreshAuthUi() {
         const authed = app.isAuthenticated();
         const sess = app.session();
-        $("auth-status").textContent = authed && sess
-          ? `вошли как «${sess.username}»`
-          : "гость";
+        let statusText = "гость";
+        if (authed) {
+          if (sess != null && typeof sess.username === "string" && sess.username.trim()) {
+            statusText = sess.username.trim();
+          } else {
+            statusText = "сессия без имени — выйдите и войдите снова";
+          }
+        }
+        $("auth-status").textContent = statusText;
         $("btn-logout").hidden = !authed;
+        $("auth-details").hidden = authed;
+        $("hint-editor").hidden = !authed;
         $("fieldset-register").hidden = authed;
         $("fieldset-login").hidden = authed;
         $("fieldset-post").hidden = !authed;
         if (!authed) {
-          editingPostId = null;
+          cancelInlineEdit();
           $("form-post").reset();
-          $("edit-id").value = "";
-          $("btn-cancel-edit").hidden = true;
-          $("post-legend").textContent = "Новый пост";
+          $("post-legend").textContent = "Новая заметка";
           $("btn-post-submit").textContent = "Опубликовать";
         }
       }
+
+      function closeAllPostMenus() {
+        document.querySelectorAll(".post-menu-dropdown").forEach((m) => {
+          m.hidden = true;
+        });
+        document.querySelectorAll(".post-menu-trigger").forEach((t) => {
+          t.setAttribute("aria-expanded", "false");
+        });
+      }
+
+      function wirePostMenu(art, p) {
+        const wrap = art.querySelector(".post-menu-wrap");
+        if (!wrap) return;
+        const trigger = wrap.querySelector(".post-menu-trigger");
+        const menu = wrap.querySelector(".post-menu-dropdown");
+        if (!(trigger instanceof HTMLElement) || !(menu instanceof HTMLElement))
+          return;
+        trigger.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const wasHidden = menu.hidden;
+          closeAllPostMenus();
+          if (wasHidden) {
+            menu.hidden = false;
+            trigger.setAttribute("aria-expanded", "true");
+          }
+        });
+        menu.addEventListener("click", (e) => e.stopPropagation());
+        wrap.querySelector(".post-menu-edit")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeAllPostMenus();
+          startInlineEdit(art, p);
+        });
+        wrap.querySelector(".post-menu-delete")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeAllPostMenus();
+          void removePost(p);
+        });
+      }
+
+      document.addEventListener("click", () => closeAllPostMenus());
 
       function validateNonEmpty(parts) {
         for (const [name, val] of parts) {
@@ -181,39 +476,224 @@
         return true;
       }
 
-      async function refreshPosts() {
-        const root = $("posts");
-        root.innerHTML = "";
+      function getSearchQueryNormalized() {
+        const el = $("post-search");
+        return String(el && el.value ? el.value : "")
+          .trim()
+          .toLowerCase();
+      }
+
+      /** Как в Discord: слова через пробел — каждое должно встретиться хотя бы в одном из полей. */
+      function postMatchesSearch(p, rawQ) {
+        const q = rawQ.trim().toLowerCase();
+        if (!q) return true;
+        const tokens = q.split(/\s+/).filter(Boolean);
+        if (!tokens.length) return true;
+        const author = String(p.author_username || "").toLowerCase();
+        const title = String(p.title || "").toLowerCase();
+        const content = String(p.content || "").toLowerCase();
+        const iso = String(p.created_at || "").toLowerCase();
+        const pretty = formatPostDate(p.created_at)
+          .toLowerCase()
+          .replace(/\s+/g, " ");
+        const merged = [author, title, content, iso, pretty].join("\n");
+        return tokens.every((t) => merged.includes(t));
+      }
+
+      function sessionContext() {
+        const session = app.session();
+        const uid =
+          session && session.user_id != null ? idNum(session.user_id) : null;
+        const sessUser =
+          session && typeof session.username === "string"
+            ? session.username.trim()
+            : "";
+        return { session, uid, sessUser };
+      }
+
+      function isOwnPost(p, ctx) {
+        const aid = idNum(p.author_id);
+        const authorName =
+          p.author_username && String(p.author_username).trim();
+        const ownById =
+          ctx.uid !== null && !Number.isNaN(aid) && aid === ctx.uid;
+        const ownByName = Boolean(
+          ctx.sessUser && authorName && ctx.sessUser === authorName,
+        );
+        return ownById || ownByName;
+      }
+
+      function postMenuDotsHtml(editOnly) {
+        if (editOnly) {
+          return `
+              <div class="post-menu-wrap">
+                <button type="button" class="post-menu-trigger" aria-haspopup="true" aria-expanded="false" title="Удалить заметку" aria-label="Действия с заметкой">
+                  <span class="post-menu-dots" aria-hidden="true">⋮</span>
+                </button>
+                <div class="post-menu-dropdown" role="menu" hidden>
+                  <button type="button" class="post-menu-item post-menu-delete" role="menuitem">Удалить</button>
+                </div>
+              </div>`;
+        }
+        return `
+              <div class="post-menu-wrap">
+                <button type="button" class="post-menu-trigger" aria-haspopup="true" aria-expanded="false" title="Действия с заметкой" aria-label="Меню заметки">
+                  <span class="post-menu-dots" aria-hidden="true">⋮</span>
+                </button>
+                <div class="post-menu-dropdown" role="menu" hidden>
+                  <button type="button" class="post-menu-item post-menu-edit" role="menuitem">Изменить</button>
+                  <button type="button" class="post-menu-item post-menu-delete" role="menuitem">Удалить</button>
+                </div>
+              </div>`;
+      }
+
+      function articleDisplayHtml(p, own) {
+        const who =
+          p.author_username && String(p.author_username).trim()
+            ? escapeHtml(String(p.author_username).trim())
+            : `id ${p.author_id}`;
+        const createdShort = escapeHtml(formatPostDate(p.created_at));
+        return `
+              <div class="post-head">
+                <h3>${escapeHtml(p.title)}</h3>
+                ${own ? postMenuDotsHtml(false) : ""}
+              </div>
+              <p class="post-body">${escapeHtml(p.content)}</p>
+              <p class="muted post-meta">${who} · ${createdShort}</p>
+            `;
+      }
+
+      function bindArticleActions(art, p, own) {
+        if (!own) return;
+        const pid = idNum(p.id);
+        if (pid != null && !Number.isNaN(pid)) art.dataset.postId = String(pid);
+        wirePostMenu(art, p);
+      }
+
+      /**
+       * @param {{ uid: *, sessUser: string }} ctx
+       */
+      function appendArticle(root, p, ctx) {
+        const art = document.createElement("article");
+        const own = isOwnPost(p, ctx);
+        art.innerHTML = articleDisplayHtml(p, own);
+        root.appendChild(art);
+        bindArticleActions(art, p, own);
+      }
+
+      function cancelInlineEdit() {
+        if (!inlineEditBackup) return;
+        const { id, html, p } = inlineEditBackup;
+        inlineEditBackup = null;
+        const art = $("posts").querySelector(`article[data-post-id="${id}"]`);
+        if (art) {
+          art.classList.remove("post-card-editing");
+          art.innerHTML = html;
+          const ctx = sessionContext();
+          bindArticleActions(art, p, isOwnPost(p, ctx));
+        }
+      }
+
+      function startInlineEdit(art, p) {
         try {
-          const data = await app.load_posts();
-          const session = app.session();
-          const uid =
-            session && session.user_id != null ? idNum(session.user_id) : null;
-          const posts = data.posts || [];
-          if (!posts.length) {
-            root.innerHTML = "<p class=\"muted\">Пока нет постов.</p>";
+          const id = idNum(p.id);
+          if (id == null || Number.isNaN(id)) {
+            setMsg("Не удалось определить id заметки.");
             return;
           }
-          for (const p of posts) {
-            const art = document.createElement("article");
-            const aid = idNum(p.author_id);
-            const own = uid !== null && aid === uid;
-            art.innerHTML = `
-              <h3>${escapeHtml(p.title)}</h3>
-              <p>${escapeHtml(p.content)}</p>
-              <p class="muted">id ${p.id} · автор ${p.author_id} · ${escapeHtml(p.updated_at)}</p>
-              ${own ? `<div class="row"><button type="button" data-edit="${p.id}">Изменить</button><button type="button" data-del="${p.id}">Удалить</button></div>` : ""}
-            `;
-            root.appendChild(art);
-          }
-          root.querySelectorAll("[data-edit]").forEach((btn) => {
-            btn.addEventListener("click", () => startEdit(Number(btn.getAttribute("data-edit"))));
+          cancelInlineEdit();
+          inlineEditBackup = { id, html: art.innerHTML, p };
+
+          art.classList.add("post-card-editing");
+          const whoPlain =
+            p.author_username && String(p.author_username).trim()
+              ? String(p.author_username).trim()
+              : `id ${p.author_id}`;
+          const meta = `${whoPlain} · ${formatPostDate(p.created_at)}`;
+
+          art.innerHTML = `
+            <div class="post-head">
+              <input type="text" class="inline-title" aria-label="Заголовок" />
+              ${postMenuDotsHtml(true)}
+            </div>
+            <textarea class="inline-content" aria-label="Содержание"></textarea>
+            <p class="muted post-meta">${escapeHtml(meta)}</p>
+            <div class="row">
+              <button type="button" class="inline-save">Сохранить</button>
+              <button type="button" class="inline-cancel">Отмена</button>
+            </div>
+          `;
+          art.dataset.postId = String(id);
+          const titleInput = art.querySelector(".inline-title");
+          const bodyInput = art.querySelector(".inline-content");
+          titleInput.value = p.title != null ? String(p.title) : "";
+          bodyInput.value = p.content != null ? String(p.content) : "";
+          requestAnimationFrame(() => {
+            titleInput.focus();
           });
-          root.querySelectorAll("[data-del]").forEach((btn) => {
-            btn.addEventListener("click", () => removePost(Number(btn.getAttribute("data-del"))));
+
+          art.querySelector(".inline-save").addEventListener("click", () => void saveInlineEdit(art, id));
+          art.querySelector(".inline-cancel").addEventListener("click", () => {
+            cancelInlineEdit();
+            setMsg("");
           });
+          wirePostMenu(art, p);
+          setMsg("");
         } catch (e) {
-          setMsg(String(e));
+          console.error(e);
+          setMsg(wasmErrMsg(e));
+        }
+      }
+
+      async function saveInlineEdit(art, id) {
+        const titleEl = art.querySelector(".inline-title");
+        const contentEl = art.querySelector(".inline-content");
+        const title = titleEl ? titleEl.value : "";
+        const content = contentEl ? contentEl.value : "";
+        if (!validateNonEmpty([
+          ["заголовок", title],
+          ["содержание", content],
+        ])) return;
+        try {
+          await app.update_post(BigInt(id), title, content);
+          inlineEditBackup = null;
+          art.classList.remove("post-card-editing");
+          await refreshPosts();
+          setMsg("");
+        } catch (e) {
+          console.error(e);
+          setMsg(wasmErrMsg(e));
+        }
+      }
+
+      function renderFilteredPosts() {
+        inlineEditBackup = null;
+        const root = $("posts");
+        const ctx = sessionContext();
+        const q = getSearchQueryNormalized();
+        const filtered = cachedPosts.filter((p) => postMatchesSearch(p, q));
+        root.innerHTML = "";
+        if (!cachedPosts.length) {
+          root.innerHTML = "<p class=\"muted\">Пока нет ни одной заметки.</p>";
+          return;
+        }
+        if (!filtered.length) {
+          root.innerHTML =
+            "<p class=\"muted\">Ничего не найдено — попробуйте другие слова или сбросьте поиск.</p>";
+          return;
+        }
+        for (const p of filtered) appendArticle(root, p, ctx);
+      }
+
+      async function refreshPosts() {
+        try {
+          cancelInlineEdit();
+          const data = await app.load_posts();
+          cachedPosts = data.posts || [];
+          renderFilteredPosts();
+        } catch (e) {
+          console.error(e);
+          setMsg(wasmErrMsg(e));
         }
       }
 
@@ -225,54 +705,33 @@
           .replace(/"/g, "&quot;");
       }
 
-      async function startEdit(id) {
-        try {
-          const p = await app.get_post(BigInt(id));
-          editingPostId = id;
-          const pf = /** @type {HTMLFormElement} */ ($("form-post"));
-          pf.elements.namedItem("title").value = p.title;
-          pf.elements.namedItem("content").value = p.content;
-          $("edit-id").value = String(id);
-          $("post-legend").textContent = `Редактирование поста #${id}`;
-          $("btn-post-submit").textContent = "Сохранить";
-          $("btn-cancel-edit").hidden = false;
-          setMsg("");
-        } catch (e) {
-          setMsg(String(e));
+      async function removePost(p) {
+        const id = idNum(p.id);
+        if (id == null || Number.isNaN(id)) {
+          setMsg("Не удалось определить id заметки.");
+          return;
         }
-      }
-
-      function cancelEdit() {
-        editingPostId = null;
-        $("form-post").reset();
-        $("edit-id").value = "";
-        $("post-legend").textContent = "Новый пост";
-        $("btn-post-submit").textContent = "Опубликовать";
-        $("btn-cancel-edit").hidden = true;
-        setMsg("");
-      }
-
-      async function removePost(id) {
-        if (!confirm(`Удалить пост #${id}?`)) return;
+        const title = String(p.title != null ? p.title : "").trim() || "без названия";
+        const when = formatPostDate(p.created_at);
+        if (!confirm(`Удалить записку ${title} (${when})?`)) return;
         try {
+          if (inlineEditBackup && inlineEditBackup.id === id) {
+            inlineEditBackup = null;
+          }
           await app.delete_post(BigInt(id));
-          cancelEdit();
           await refreshPosts();
           setMsg("");
         } catch (e) {
-          setMsg(String(e));
+          console.error(e);
+          setMsg(wasmErrMsg(e));
         }
       }
 
       await init();
 
-      $("btn-reconnect").addEventListener("click", () => {
-        recreateApp();
-        refreshPosts();
-      });
-
       $("btn-logout").addEventListener("click", () => {
         app.logout();
+        closeAuthGate();
         refreshAuthUi();
         refreshPosts();
         setMsg("");
@@ -292,29 +751,33 @@
         try {
           await app.register(username, email, password);
           f.reset();
+          closeAuthGate();
           refreshAuthUi();
           await refreshPosts();
         } catch (e) {
-          setMsg(String(e));
+          console.error(e);
+          setMsg(wasmErrMsg(e));
         }
       });
 
       $("form-login").addEventListener("submit", async (ev) => {
         ev.preventDefault();
         const f = ev.target;
-        const username = f.username.value;
+        const email = f.email.value;
         const password = f.password.value;
         if (!validateNonEmpty([
-          ["имя", username],
+          ["email", email],
           ["пароль", password],
         ])) return;
         try {
-          await app.login(username, password);
+          await app.login(email, password);
           f.reset();
+          closeAuthGate();
           refreshAuthUi();
           await refreshPosts();
         } catch (e) {
-          setMsg(String(e));
+          console.error(e);
+          setMsg(wasmErrMsg(e));
         }
       });
 
@@ -328,24 +791,27 @@
           ["содержание", content],
         ])) return;
         try {
-          const idStr = $("edit-id").value.trim();
-          if (idStr) {
-            await app.update_post(BigInt(idStr), title, content);
-          } else {
-            await app.create_post(title, content);
-          }
+          await app.create_post(title, content);
           f.reset();
-          cancelEdit();
           refreshAuthUi();
           await refreshPosts();
         } catch (e) {
-          setMsg(String(e));
+          console.error(e);
+          setMsg(wasmErrMsg(e));
         }
       });
 
-      $("btn-cancel-edit").addEventListener("click", () => cancelEdit());
+      $("post-search").addEventListener("input", () => {
+        renderFilteredPosts();
+      });
+      $("post-search").addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          ev.target.value = "";
+          renderFilteredPosts();
+        }
+      });
 
-      recreateApp();
+      createApp();
       await refreshPosts();
     </script>
   </body>

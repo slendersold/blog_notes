@@ -62,7 +62,7 @@ fn user_pb(u: &crate::domain::user::User) -> blog::User {
     }
 }
 
-fn post_pb(p: &crate::domain::post::Post) -> blog::Post {
+fn post_pb(p: &crate::domain::post::PostPublic) -> blog::Post {
     blog::Post {
         id: p.id,
         title: p.title.clone(),
@@ -70,6 +70,7 @@ fn post_pb(p: &crate::domain::post::Post) -> blog::Post {
         author_id: p.author_id,
         created_at: p.created_at.to_rfc3339(),
         updated_at: p.updated_at.to_rfc3339(),
+        author_username: p.author_username.clone(),
     }
 }
 
@@ -123,7 +124,7 @@ impl blog::blog_service_server::BlogService for GrpcBlogService {
     ) -> Result<Response<blog::AuthResponse>, Status> {
         let inner = req.into_inner();
         let dto = DLogin {
-            username: inner.username,
+            email: inner.email,
             password: inner.password,
         };
         match self.auth_service.login(dto).await {

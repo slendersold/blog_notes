@@ -1,5 +1,6 @@
-# Ветка main/master: полный прогон всего workspace — все крейты, все таргеты тестов,
-# интеграционные тесты членов воркспейса и отдельный шаг с Postgres для #[ignored] тестов.
+# Ветка main/master: полный прогон всего workspace — все крейты, fmt/clippy, тесты,
+# интеграционный сценарий blog-integration-tests (Docker Compose + параллельные CLI),
+# отдельный шаг с Postgres для #[ignored] миграций blog-server.
 name: CI (main · full workspace)
 
 on:
@@ -7,6 +8,11 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -49,8 +55,13 @@ jobs:
       - name: Build (workspace)
         run: cargo build --workspace
 
-      # Все unit-, integration- и doc-тесты всех членов workspace (кроме #[ignored]).
-      - name: "Tests (workspace); lib bins integration doc; без ignored"
+      # blog-integration-tests/build.rs проверяет наличие blog-cli и blog-server в target;
+      # явная сборка гарантирует порядок до cargo test на ранжированных воркерах CI.
+      - name: Build blog-cli and blog-server binaries (for blog-integration-tests build.rs)
+        run: cargo build -p blog-cli -p blog-server
+
+      # Все unit-, integration- и doc-тесты (включая Docker Compose в cli_five_clients_integration).
+      - name: "Tests: full workspace (Docker required for blog-integration-tests)"
         run: cargo test --workspace
 
       - name: "Integration tests with Postgres (ignored test; needs DATABASE_URL)"

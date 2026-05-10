@@ -17,10 +17,9 @@ chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["signal"] }
 actix-cors.workspace = true
-actix-web.workspace = true
-actix-web-httpauth.workspace = true
+actix-web = { workspace = true, features = ["macros"] }
 argon2.workspace = true
 password-hash.workspace = true
 dotenvy.workspace = true
@@ -31,3 +30,6 @@ tracing-subscriber.workspace = true
 
 [build-dependencies]
 tonic-build.workspace = true
+
+[dev-dependencies]
+serde_urlencoded = "0.7"
