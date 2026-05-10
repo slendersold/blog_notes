@@ -30,6 +30,9 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
+      - name: Build blog-cli and blog-server (for blog-integration-tests build.rs)
+        run: cargo build -p blog-cli -p blog-server
+
       - name: Clippy (workspace)
         run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
 

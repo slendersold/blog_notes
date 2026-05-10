@@ -49,16 +49,16 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
+      # blog-integration-tests/build.rs требует blog-cli и blog-server в target/ до сборки самого крейта
+      # (иначе паника в build script). Нужно до clippy/test — иначе clippy собирает integration-tests первым.
+      - name: Build blog-cli and blog-server (for blog-integration-tests build.rs)
+        run: cargo build -p blog-cli -p blog-server
+
       - name: Clippy (workspace)
         run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
 
       - name: Build (workspace)
         run: cargo build --workspace
-
-      # blog-integration-tests/build.rs проверяет наличие blog-cli и blog-server в target;
-      # явная сборка гарантирует порядок до cargo test на ранжированных воркерах CI.
-      - name: Build blog-cli and blog-server binaries (for blog-integration-tests build.rs)
-        run: cargo build -p blog-cli -p blog-server
 
       # Все unit-, integration- и doc-тесты (включая Docker Compose в cli_five_clients_integration).
       - name: "Tests: full workspace (Docker required for blog-integration-tests)"
