@@ -131,6 +131,8 @@ fn docker_compose_up_and_wait(workspace: &Path, compose_file: &Path, project: &s
     );
 }
 
+/// Поиск exe `blog-cli` / `blog-server` в `CARGO_TARGET_DIR`, `tmp/target`, `target` (workspace root).
+/// Тот же паттерн, что в `blog-cli/tests/cli_help_smoke.rs`.
 fn cargo_bin_hyphen(name: &'static str) -> PathBuf {
     let exe_key = format!("CARGO_BIN_EXE_{}", name.replace('-', "_"));
     if let Some(p) = std::env::var_os(&exe_key).map(PathBuf::from) {
